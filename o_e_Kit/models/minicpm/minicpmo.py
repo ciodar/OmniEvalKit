@@ -133,14 +133,14 @@ class MiniCPM_o:
         if quantization != 'none':
             try:
                 from transformers import BitsAndBytesConfig
+                if quantization == '8bit':
+                    print("  ⚠️ 8-bit quantization has dtype conflicts with MiniCPM-O's native "
+                          "MultiheadAttention in the vision resampler. Auto-switching to 4-bit.")
+                    quantization = '4bit'
                 if quantization == '4bit':
                     load_kwargs["quantization_config"] = BitsAndBytesConfig(
                         load_in_4bit=True,
                         bnb_4bit_compute_dtype=torch.bfloat16
-                    )
-                elif quantization == '8bit':
-                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                        load_in_8bit=True,
                     )
             except ImportError:
                 print("⚠️ bitsandbytes 库未安装，忽略量化参数。")
