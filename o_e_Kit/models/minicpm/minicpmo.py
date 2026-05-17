@@ -32,7 +32,12 @@ class MiniCPM_o:
 
     def __init__(self, model_path: str, ckpt_path: Optional[str] = None, device=None, 
                  config_path: Optional[str] = None, 
-                 dataset_generation_config_path: Optional[str] = None) -> None:
+                 dataset_generation_config_path: Optional[str] = None,
+                 auto_device_map: bool = False,
+                 quantization: str = 'none',
+                 attn_implementation: Optional[str] = None,
+                 max_inp_length: int = 32768,
+                 cpu_offload: bool = False) -> None:
         random.seed(0)
         np.random.seed(0)
         torch.manual_seed(0)
@@ -61,14 +66,17 @@ class MiniCPM_o:
         
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model_path = model_path
+        self.max_inp_length = max_inp_length
+        self.cpu_offload = cpu_offload
         
         # 初始化模型
-        self._init_model(model_path, ckpt_path, config_path)
+        self._init_model(model_path, ckpt_path, config_path, auto_device_map, quantization, attn_implementation)
         
         torch.cuda.empty_cache()
         print(f"✅ 模型加载完成")
     
-    def _init_model(self, model_path: str, ckpt_path: Optional[str], config_path: Optional[str]):
+    def _init_model(self, model_path: str, ckpt_path: Optional[str], config_path: Optional[str],
+                    auto_device_map: bool, quantization: str, attn_implementation: Optional[str]):
         """
         初始化模型、tokenizer 和 processor
         """
@@ -90,13 +98,43 @@ class MiniCPM_o:
             
             print(f"  pool-step: {config.audio_pool_step}, audio_chunk_length: {config.audio_chunk_length}")
         
+        # 处理加载参数
+        load_kwargs = {
+            "config": config,
+            "trust_remote_code": True,
+            "local_files_only": True
+        }
+        
+        if auto_device_map:
+            load_kwargs["device_map"] = "auto"
+            load_kwargs["torch_dtype"] = torch.bfloat16
+            if self.cpu_offload:
+                num_gpus = torch.cuda.device_count()
+                max_memory = {i: "14GB" for i in range(num_gpus)}
+                max_memory["cpu"] = "64GB"
+                load_kwargs["max_memory"] = max_memory
+                print(f"  CPU offload enabled: max_memory={max_memory}")
+
+        if attn_implementation:
+            load_kwargs["attn_implementation"] = attn_implementation
+
+        if quantization != 'none':
+            try:
+                from transformers import BitsAndBytesConfig
+                if quantization == '4bit':
+                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                        load_in_4bit=True,
+                        bnb_4bit_compute_dtype=torch.bfloat16
+                    )
+                elif quantization == '8bit':
+                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
+                        load_in_8bit=True,
+                    )
+            except ImportError:
+                print("⚠️ bitsandbytes 库未安装，忽略量化参数。")
+
         # 加载模型
-        self.model = AutoModel.from_pretrained(
-            model_path, 
-            config=config, 
-            trust_remote_code=True, 
-            local_files_only=True
-        )
+        self.model = AutoModel.from_pretrained(model_path, **load_kwargs)
         
         # 加载 checkpoint（可选）
         if ckpt_path is not None:
@@ -112,8 +150,10 @@ class MiniCPM_o:
             print(f"missing_keys: {missing_keys}\nunexpected_keys: {unexpected_keys}")
         
         self.model.eval()
-        self.model.to(self.device)
-        self.model = self.model.to(torch.bfloat16)
+        
+        if not auto_device_map and quantization == 'none':
+            self.model.to(self.device)
+            self.model = self.model.to(torch.bfloat16)
         
         # 加载 tokenizer 和 processor
         self.tokenizer = AutoTokenizer.from_pretrained(
@@ -466,7 +506,7 @@ class MiniCPM_o:
                     msgs=msgs,
                     do_sample=False,
                     max_new_tokens=max_tokens,
-                    max_inp_length=32768,  # 支持长视频处理
+                    max_inp_length=self.max_inp_length,
                     use_tts_template=True,
                     use_image_id=use_image_id,
                     max_slice_nums=max_slice_nums,

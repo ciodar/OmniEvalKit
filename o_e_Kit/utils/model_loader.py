@@ -59,7 +59,12 @@ def load_model(args, device, duplex_type=None):
             args.pt_path, 
             device, 
             args.config_path,
-            dataset_generation_config_path=getattr(args, 'dataset_generation_config_path', None)
+            dataset_generation_config_path=getattr(args, 'dataset_generation_config_path', None),
+            auto_device_map=getattr(args, 'auto_device_map', False),
+            quantization=getattr(args, 'quantization', 'none'),
+            attn_implementation=getattr(args, 'attn_implementation', None),
+            max_inp_length=getattr(args, 'max_inp_length', 32768),
+            cpu_offload=getattr(args, 'cpu_offload', False)
         )
     elif args.model_type == 'whisper':
         args.generate_method = "batch"

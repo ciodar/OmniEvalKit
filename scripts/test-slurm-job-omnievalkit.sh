@@ -100,6 +100,12 @@ if [ -n "${MAX_SAMPLES}" ]; then
     OPT_ARGS+=" --max_sample_num ${MAX_SAMPLES}"
 fi
 
+# 多GPU模型分片（如需跨卡分布模型，取消注释下一行）
+# OPT_ARGS+=" --auto_device_map --attn_implementation flash_attention_2"
+
+# 量化（如需降低显存占用，取消注释下一行）
+# OPT_ARGS+=" --quantization 4bit"
+
 OPT_ARGS+=" ${EVAL_DATASETS}"
 
 MASTER_PORT=${MASTER_PORT:-29500}
