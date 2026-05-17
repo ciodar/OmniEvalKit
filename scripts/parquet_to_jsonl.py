@@ -80,34 +80,75 @@ def write_file_bytes(file_path: str, data: bytes) -> bool:
 
 def read_parquet_sharded(input_path: str) -> pd.DataFrame:
     """读取 Parquet 文件，支持分片格式。
-    
+
     如果 input_path 是单个文件则直接读取；
     如果目录下存在 data-*-of-*.parquet 分片文件则合并读取。
     """
-    if os.path.isfile(input_path):
-        base, ext = os.path.splitext(input_path)
-        shard_pattern = f"{base}-*-of-*{ext}"
+
+    def _resolve_files(path: str) -> list[str]:
+        if os.path.isfile(path):
+            base, ext = os.path.splitext(path)
+            shard_pattern = f"{base}-*-of-*{ext}"
+            shard_files = sorted(glob_module.glob(shard_pattern))
+            return shard_files or [path]
+
+        if os.path.isdir(path):
+            files = sorted(glob_module.glob(os.path.join(path, "*.parquet")))
+            if not files:
+                raise FileNotFoundError(f"目录中没有 Parquet 文件: {path}")
+            return files
+
+        shard_pattern = path.replace(".parquet", "-*-of-*.parquet")
         shard_files = sorted(glob_module.glob(shard_pattern))
         if shard_files:
-            dfs = [pd.read_parquet(f) for f in shard_files]
-            return pd.concat(dfs, ignore_index=True)
-        return pd.read_parquet(input_path)
-    
-    if os.path.isdir(input_path):
-        pattern = os.path.join(input_path, "*.parquet")
-        files = sorted(glob_module.glob(pattern))
-        if not files:
-            raise FileNotFoundError(f"目录中没有 Parquet 文件: {input_path}")
-        dfs = [pd.read_parquet(f) for f in files]
-        return pd.concat(dfs, ignore_index=True)
-    
-    shard_pattern = input_path.replace('.parquet', '-*-of-*.parquet')
-    shard_files = sorted(glob_module.glob(shard_pattern))
-    if shard_files:
-        dfs = [pd.read_parquet(f) for f in shard_files]
-        return pd.concat(dfs, ignore_index=True)
-    
-    raise FileNotFoundError(f"找不到 Parquet 文件: {input_path}")
+            return shard_files
+
+        raise FileNotFoundError(f"找不到 Parquet 文件: {path}")
+
+    def _safe_read_parquet(files: list[str]) -> pd.DataFrame:
+        dfs = []
+
+        for f in files:
+            print(f"Processing: {f}")
+            pf = pq.ParquetFile(f)
+            schema = pf.schema_arrow
+
+            # Drop nested columns to avoid Arrow/Pandas conversion issues
+            nested_cols = [
+                field.name
+                for field in schema
+                if pa.types.is_nested(field.type)
+            ]
+
+            if nested_cols:
+                print(f"Skipping nested columns: {nested_cols}")
+
+            safe_cols = [
+                name for name in schema.names
+                if name not in nested_cols
+            ]
+
+            for rg_idx in range(pf.num_row_groups):
+                table = pf.read_row_group(
+                    rg_idx,
+                    columns=safe_cols,
+                    use_threads=False,
+                )
+
+                # Reduce peak memory during conversion
+                df = table.to_pandas(split_blocks=True, self_destruct=True)
+                dfs.append(df)
+
+                del table, df
+                gc.collect()
+
+        if not dfs:
+            return pd.DataFrame()
+
+        return pd.concat(dfs, ignore_index=True, copy=False)
+
+    files = _resolve_files(input_path)
+    return _safe_read_parquet(files)
 
 
 def parquet_to_jsonl(

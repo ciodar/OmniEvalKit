@@ -8,7 +8,7 @@ version = "1.0.0"
 description = "全方位、多模态语言模型评测套件 (Omni-modal & Multi-modal LLM Evaluation Toolkit)"
 readme = "README.md"
 license = "Apache-2.0"
-requires-python = ">=3.10"
+requires-python = "==3.11.7"
 keywords = ["evaluation", "multimodal", "speech", "audio", "llm", "benchmark"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -49,7 +49,7 @@ dependencies = [
     "huggingface-hub",
     "pyarrow",
     "decord",
-    "transformers",
+    "transformers==4.57.3",
     "pillow",
     "absl-py",
 ]

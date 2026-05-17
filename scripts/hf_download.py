@@ -86,6 +86,7 @@ def download_and_restore_dataset(
     ds_info: Dict[str, Any],
     repo_id: str,
     output_dir: str,
+    cache_dir: Optional[str] = None,
 ):
     """下载单个数据集的 Parquet 并还原"""
     from parquet_to_jsonl import parquet_to_jsonl
@@ -136,6 +137,7 @@ def download_and_restore_dataset(
             local = hf_hub_download(
                 repo_id=repo_id,
                 filename=shard_name,
+                cache_dir=cache_dir,
                 repo_type="dataset",
             )
             downloaded_files.append(local)
@@ -229,6 +231,8 @@ def main():
                         help="输出根目录（默认 ./data）")
     parser.add_argument("--datasets", type=str, default=None,
                         help="逗号分隔的数据集名称")
+    parser.add_argument("--cache_dir", type=str, default=None,
+                        help="缓存目录（默认为系统默认缓存目录）")
     parser.add_argument("--download_videos", action="store_true",
                         help="尝试从原始来源下载视频文件")
     parser.add_argument("--list", action="store_true", dest="list_only",
@@ -274,7 +278,7 @@ def main():
     for i, (name, ds_info) in enumerate(sorted(selected.items())):
         print(f"\n[{i+1}/{len(selected)}] {ds_info.get('display_name', name)} ({name})")
         
-        result = download_and_restore_dataset(ds_info, args.repo_id, args.output_dir)
+        result = download_and_restore_dataset(ds_info, args.repo_id, args.output_dir, args.cache_dir)
         status = result.get("status")
         
         if status == "success":
