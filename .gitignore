@@ -194,7 +194,7 @@ output_2*
 test_output/
 visualization_output/
 output/
-models
+models/
 
 # Terminals
 terminals/

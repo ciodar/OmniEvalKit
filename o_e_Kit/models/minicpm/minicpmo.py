@@ -105,9 +105,21 @@ class MiniCPM_o:
             "local_files_only": True
         }
         
+        # 禁用 TTS 头：评估模式下不需要 TTS 输出，且与量化/多卡分片存在兼容性问题
+        if hasattr(config, 'init_tts'):
+            config.init_tts = False
+            print("  init_tts set to False (TTS disabled for evaluation)")
+
         if auto_device_map:
-            load_kwargs["device_map"] = "auto"
-            load_kwargs["torch_dtype"] = torch.bfloat16
+            if torch.distributed.is_initialized() and torch.distributed.get_world_size() > 1:
+                rank = torch.distributed.get_rank()
+                print(f"  ⚠️ auto_device_map with world_size>1: rank {rank} will see all GPUs. "
+                      f"For cross-GPU model parallelism use torchrun --nproc_per_node=1. "
+                      f"Falling back to single-GPU per process.")
+                load_kwargs["device_map"] = {"": rank}
+            else:
+                load_kwargs["device_map"] = "auto"
+            load_kwargs["dtype"] = torch.bfloat16
             if self.cpu_offload:
                 num_gpus = torch.cuda.device_count()
                 max_memory = {i: "14GB" for i in range(num_gpus)}
