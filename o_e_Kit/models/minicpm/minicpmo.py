@@ -74,7 +74,25 @@ class MiniCPM_o:
         
         torch.cuda.empty_cache()
         print(f"✅ 模型加载完成")
-    
+
+    @staticmethod
+    def _is_quantized_model(model_path: str) -> bool:
+        """Check if the model is pre-quantized (AWQ/GPTQ/GGUF).
+
+        Reads ``config.json`` in the model directory and looks for a
+        ``quantization_config`` section with a ``quant_method``.
+        """
+        config_file = os.path.join(model_path, "config.json")
+        if not os.path.isfile(config_file):
+            return False
+        try:
+            with open(config_file, "r", encoding="utf-8") as f:
+                cfg = json.load(f)
+            qcfg = cfg.get("quantization_config")
+            return bool(qcfg and qcfg.get("quant_method"))
+        except Exception:
+            return False
+
     def _init_model(self, model_path: str, ckpt_path: Optional[str], config_path: Optional[str],
                     auto_device_map: bool, quantization: str, attn_implementation: Optional[str]):
         """
@@ -97,18 +115,58 @@ class MiniCPM_o:
                     setattr(config, key, value)
             
             print(f"  pool-step: {config.audio_pool_step}, audio_chunk_length: {config.audio_chunk_length}")
-        
+
+        # Auto-detect attention implementation when not specified
+        if attn_implementation is None:
+            try:
+                from transformers.utils import is_flash_attn_2_available
+                if is_flash_attn_2_available():
+                    attn_implementation = "flash_attention_2"
+                else:
+                    attn_implementation = "sdpa"
+            except ImportError:
+                attn_implementation = "sdpa"
+            print(f"  attn_implementation: auto -> {attn_implementation}")
+
+        # Enable batch vision processing for lower peak memory
+        if hasattr(config, 'batch_vision_input'):
+            config.batch_vision_input = True
+            config.vision_batch_size = 8
+            print("  batch_vision_input enabled, vision_batch_size=8")
+
+        # Check if model is pre-quantized (AWQ/GPTQ/GGUF)
+        is_quantized = self._is_quantized_model(model_path)
+        if is_quantized:
+            print("  Pre-quantized model detected (AWQ/GPTQ/GGUF)")
+
         # 处理加载参数
         load_kwargs = {
             "config": config,
             "trust_remote_code": True,
             "local_files_only": True
         }
-        
+
         # 禁用 TTS 头：评估模式下不需要 TTS 输出，且与量化/多卡分片存在兼容性问题
         if hasattr(config, 'init_tts'):
             config.init_tts = False
             print("  init_tts set to False (TTS disabled for evaluation)")
+
+        if is_quantized:
+            # Pre-quantized model (AWQ/GPTQ/GGUF): skip torch_dtype override.
+            # The model's weights are already in the correct (integer) dtype;
+            # casting quantized int weights to bfloat16 would corrupt them.
+            if quantization != 'none':
+                print("  Pre-quantized model detected — ignoring --quantization flag, loading as-is")
+        else:
+            if quantization == '4bit':
+                load_kwargs["load_in_4bit"] = True
+                load_kwargs["bnb_4bit_compute_dtype"] = torch.bfloat16
+                print("  Loading with BitsAndBytes 4-bit quantization")
+            elif quantization == '8bit':
+                load_kwargs["load_in_8bit"] = True
+                print("  Loading with BitsAndBytes 8-bit quantization")
+            else:
+                load_kwargs["torch_dtype"] = torch.bfloat16
 
         if auto_device_map:
             if torch.distributed.is_initialized() and torch.distributed.get_world_size() > 1:
@@ -119,7 +177,6 @@ class MiniCPM_o:
                 load_kwargs["device_map"] = {"": rank}
             else:
                 load_kwargs["device_map"] = "auto"
-            load_kwargs["dtype"] = torch.bfloat16
             if self.cpu_offload:
                 num_gpus = torch.cuda.device_count()
                 max_memory = {i: "14GB" for i in range(num_gpus)}
@@ -130,22 +187,7 @@ class MiniCPM_o:
         if attn_implementation:
             load_kwargs["attn_implementation"] = attn_implementation
 
-        if quantization != 'none':
-            try:
-                from transformers import BitsAndBytesConfig
-                if quantization == '8bit':
-                    print("  ⚠️ 8-bit quantization has dtype conflicts with MiniCPM-O's native "
-                          "MultiheadAttention in the vision resampler. Auto-switching to 4-bit.")
-                    quantization = '4bit'
-                if quantization == '4bit':
-                    load_kwargs["quantization_config"] = BitsAndBytesConfig(
-                        load_in_4bit=True,
-                        bnb_4bit_compute_dtype=torch.bfloat16
-                    )
-            except ImportError:
-                print("⚠️ bitsandbytes 库未安装，忽略量化参数。")
-
-        # 加载模型
+        # 加载模型 (BF16 from disk, no FP32 peak)
         self.model = AutoModel.from_pretrained(model_path, **load_kwargs)
         
         # 加载 checkpoint（可选）
@@ -162,10 +204,9 @@ class MiniCPM_o:
             print(f"missing_keys: {missing_keys}\nunexpected_keys: {unexpected_keys}")
         
         self.model.eval()
-        
-        if not auto_device_map and quantization == 'none':
+
+        if not auto_device_map and not is_quantized:
             self.model.to(self.device)
-            self.model = self.model.to(torch.bfloat16)
         
         # 加载 tokenizer 和 processor
         self.tokenizer = AutoTokenizer.from_pretrained(
