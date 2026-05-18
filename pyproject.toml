@@ -52,6 +52,9 @@ dependencies = [
     "transformers==4.57.3",
     "pillow",
     "absl-py",
+    "accelerate",
+    "bitsandbytes",
+    "protobuf"
 ]
 
 [project.optional-dependencies]
