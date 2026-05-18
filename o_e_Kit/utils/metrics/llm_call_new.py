@@ -3,8 +3,10 @@ import json
 import time
 import requests
 import os
+import re
 from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 # 自动加载 .env 文件
 def _load_env_file():
@@ -105,6 +107,8 @@ class ChatClient:
         else:
             self.api_key = None
             print("⚠️ Warning: No API key configured. Please set OPENAI_API_KEY environment variable.")
+            print("   Alternatively, set EVAL_LLM_MODEL to a HuggingFace model path to use a local model as judge.")
+            print("   Example: export EVAL_LLM_MODEL=Qwen/Qwen2.5-1.5B-Instruct")
         
         self.base_url = base_url or os.environ.get(
             'OPENAI_API_BASE', 
@@ -273,6 +277,115 @@ class ChatClient:
                 raise ValueError(f"Error: API call failed - {str(e)}")
             return ""
     
+class HuggingFaceJudgeClient:
+    """
+    HuggingFace 本地模型评测客户端
+    与 ChatClient 的 get_eval 接口保持一致，但使用本地 HF 模型替代 OpenAI API。
+
+    通过环境变量 EVAL_LLM_MODEL 配置使用的 HF 模型路径，例如：
+        export EVAL_LLM_MODEL=Qwen/Qwen2.5-1.5B-Instruct
+
+    当该变量未设置时，默认回退到 OpenAI ChatClient。
+    """
+
+    def __init__(self, model_path: Optional[str] = None, device: str = 'cuda'):
+        self.model_path = model_path or os.environ.get('EVAL_LLM_MODEL', '')
+        self.device = device
+
+        if not self.model_path:
+            raise ValueError(
+                "HuggingFaceJudgeClient requires EVAL_LLM_MODEL env var or model_path arg. "
+                "Example: export EVAL_LLM_MODEL=Qwen/Qwen2.5-1.5B-Instruct"
+            )
+
+        print(f"🤗 Loading HF judge model: {self.model_path} on {self.device}...")
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_path, trust_remote_code=True, padding_side='left'
+        )
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.model_path,
+            torch_dtype=torch.bfloat16,
+            device_map='auto' if device == 'cuda' else None,
+            trust_remote_code=True,
+        )
+        self.model.eval()
+        if device != 'cuda':
+            self.model = self.model.to(device)
+
+        print(f"✅ HF judge model loaded: {self.model_path}")
+
+    def get_eval(self, content, chat_gpt_system=None,
+                 max_tokens=2048, fail_limit=2, return_resp=False,
+                 model_name=None, temperature=0.1):
+        """
+        与 ChatClient.get_eval 兼容的接口，使用本地 HF 模型推理。
+        model_name 参数被忽略（我们使用自身加载的模型）。
+        """
+        import torch
+
+        messages = []
+        if chat_gpt_system:
+            messages.append({"role": "system", "content": chat_gpt_system})
+        messages.append({"role": "user", "content": content})
+
+        text = self.tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
+        )
+
+        inputs = self.tokenizer(text, return_tensors='pt', truncation=True, max_length=4096)
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_tokens,
+                temperature=temperature if temperature > 0 else None,
+                top_p=0.9 if temperature > 0 else None,
+                do_sample=temperature > 0,
+                pad_token_id=self.tokenizer.pad_token_id,
+            )
+
+        response = self.tokenizer.decode(
+            outputs[0][inputs['input_ids'].shape[1]:],
+            skip_special_tokens=True
+        ).strip()
+
+        if return_resp:
+            resp = {'data': {'messages': [{'content': response}]}}
+            return response, resp
+        return response
+
+
+def create_llm_client(use_llm_fallback: bool = True) -> Optional[object]:
+    """
+    根据环境变量创建合适的 LLM 评测客户端。
+
+    优先级:
+    1. 如果设置了 EVAL_LLM_MODEL 环境变量 -> 使用 HuggingFaceJudgeClient
+    2. 否则 -> 使用 OpenAI ChatClient（需要 OPENAI_API_KEY）
+
+    Args:
+        use_llm_fallback: 是否使用 LLM 后备
+
+    Returns:
+        ChatClient 或 HuggingFaceJudgeClient 实例，或 None
+    """
+    if not use_llm_fallback:
+        return None
+
+    hf_model = os.environ.get('EVAL_LLM_MODEL', '').strip()
+    if hf_model:
+        return HuggingFaceJudgeClient(model_path=hf_model)
+
+    return ChatClient()
+
+
 def test_all_api_keys():
     """
     测试所有 API Key 是否可用

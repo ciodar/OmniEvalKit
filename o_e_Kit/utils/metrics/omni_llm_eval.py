@@ -11,7 +11,7 @@ import re
 from typing import Dict, List, Tuple
 from tqdm import tqdm
 import statistics
-from .llm_call_new import ChatClient, APIModelName
+from .llm_call_new import ChatClient, APIModelName, create_llm_client
 
 # 评估提示模板
 RELEVANCE_PROMPT_TEMPLATE = """Please evaluate the relevance between the model-generated content and the ground truth annotation. Consider semantic similarity and content matching. Language is not limited (English, Chinese, etc.).
@@ -79,7 +79,12 @@ class OmniLLMEvaluator:
     """全模态LLM评估器"""
     
     def __init__(self):
-        self.chat_client = ChatClient()
+        self.chat_client = create_llm_client(use_llm_fallback=True)
+        if self.chat_client is None:
+            raise ValueError(
+                "OmniLLMEvaluator requires an LLM backend. "
+                "Set EVAL_LLM_MODEL to a HuggingFace model path, or OPENAI_API_KEY for OpenAI."
+            )
         
     def extract_score(self, response: str) -> int:
         """从LLM响应中提取分数"""

@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import re
 from collections import defaultdict
-from o_e_Kit.utils.metrics.llm_call_new import ChatClient, APIModelName
+from o_e_Kit.utils.metrics.llm_call_new import ChatClient, APIModelName, create_llm_client
 from enum import Enum
 from o_e_Kit.utils.logger.simple_progress import smart_progress
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -47,7 +47,7 @@ class BaseEvaluator(ABC):
         self.group_by_fields = group_by_fields or []
         
         if use_llm_fallback:
-            self.llm_client = ChatClient()
+            self.llm_client = create_llm_client(use_llm_fallback=True)
         
         # 用于线程安全的锁
         self._lock = threading.Lock()
