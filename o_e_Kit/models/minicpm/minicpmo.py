@@ -77,11 +77,6 @@ class MiniCPM_o:
 
     @staticmethod
     def _is_quantized_model(model_path: str) -> bool:
-        """Check if the model is pre-quantized (AWQ/GPTQ/GGUF).
-
-        Reads ``config.json`` in the model directory and looks for a
-        ``quantization_config`` section with a ``quant_method``.
-        """
         config_file = os.path.join(model_path, "config.json")
         if not os.path.isfile(config_file):
             return False
@@ -145,16 +140,12 @@ class MiniCPM_o:
             "trust_remote_code": True,
             "local_files_only": True
         }
-
         # 禁用 TTS 头：评估模式下不需要 TTS 输出，且与量化/多卡分片存在兼容性问题
         if hasattr(config, 'init_tts'):
             config.init_tts = False
             print("  init_tts set to False (TTS disabled for evaluation)")
 
         if is_quantized:
-            # Pre-quantized model (AWQ/GPTQ/GGUF): skip torch_dtype override.
-            # The model's weights are already in the correct (integer) dtype;
-            # casting quantized int weights to bfloat16 would corrupt them.
             if quantization != 'none':
                 print("  Pre-quantized model detected — ignoring --quantization flag, loading as-is")
         else:
@@ -183,7 +174,6 @@ class MiniCPM_o:
         if attn_implementation:
             load_kwargs["attn_implementation"] = attn_implementation
 
-        # 加载模型 (BF16 from disk, no FP32 peak)
         self.model = AutoModel.from_pretrained(model_path, **load_kwargs)
         
         # 加载 checkpoint（可选）

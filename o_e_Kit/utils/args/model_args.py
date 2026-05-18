@@ -30,6 +30,14 @@ def add_model_args(parser: argparse.ArgumentParser):
                                'gemini_omni',           # Gemini 多模态 API 评测模型
                            ],
                            help="使用的模型逻辑类型")
+                           
+    model_group.add_argument("--auto_device_map", action="store_true",
+                           help="是否使用 accelerate 的 device_map='auto' 来自动在多卡间分配模型层")
+    model_group.add_argument("--quantization", type=str, default="none",
+                           choices=["none", "4bit", "8bit"],
+                           help="模型量化级别 (none, 4bit, 8bit)")
+    model_group.add_argument("--attn_implementation", type=str, default=None,
+                           help="Attention 实现方式，例如 'flash_attention_2' 或 'sdpa'")
     
     generation_group = parser.add_argument_group('生成配置', '模型生成和解码相关参数')
     

@@ -291,6 +291,8 @@ class HuggingFaceJudgeClient:
     def __init__(self, model_path: Optional[str] = None, device: str = 'cuda'):
         self.model_path = model_path or os.environ.get('EVAL_LLM_MODEL', '')
         self.device = device
+        self.tokenizer = None
+        self.model = None
 
         if not self.model_path:
             raise ValueError(
@@ -298,27 +300,39 @@ class HuggingFaceJudgeClient:
                 "Example: export EVAL_LLM_MODEL=Qwen/Qwen2.5-1.5B-Instruct"
             )
 
-        print(f"🤗 Loading HF judge model: {self.model_path} on {self.device}...")
         import torch
+        import traceback
         from transformers import AutoModelForCausalLM, AutoTokenizer
 
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, trust_remote_code=True, padding_side='left'
-        )
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+        print(f"🤗 Loading HF judge model: {self.model_path} on {self.device}...")
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_path, trust_remote_code=True, padding_side='left'
+            )
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.model_path,
-            torch_dtype=torch.bfloat16,
-            device_map='auto' if device == 'cuda' else None,
-            trust_remote_code=True,
-        )
-        self.model.eval()
-        if device != 'cuda':
-            self.model = self.model.to(device)
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_path,
+                torch_dtype=torch.bfloat16,
+                device_map='auto' if device == 'cuda' else None,
+                trust_remote_code=True,
+            )
+            self.model.eval()
+            if device != 'cuda':
+                self.model = self.model.to(device)
 
-        print(f"✅ HF judge model loaded: {self.model_path}")
+            print(f"✅ HF judge model loaded: {self.model_path}")
+        except Exception as e:
+            print(f"❌ Failed to load HF judge model '{self.model_path}': {e}")
+            traceback.print_exc()
+            print()
+            print("Tips:")
+            print("  - Make sure the model name is correct and accessible")
+            print("  - For local models, use the full path")
+            print("  - Some models may need specific transformers versions")
+            print("  - Try a smaller model like: Qwen/Qwen2.5-0.5B-Instruct")
+            raise
 
     def get_eval(self, content, chat_gpt_system=None,
                  max_tokens=2048, fail_limit=2, return_resp=False,
@@ -328,38 +342,46 @@ class HuggingFaceJudgeClient:
         model_name 参数被忽略（我们使用自身加载的模型）。
         """
         import torch
+        import traceback
 
-        messages = []
-        if chat_gpt_system:
-            messages.append({"role": "system", "content": chat_gpt_system})
-        messages.append({"role": "user", "content": content})
+        try:
+            messages = []
+            if chat_gpt_system:
+                content_str = str(content)
+                messages.append({"role": "system", "content": content_str})
+            messages.append({"role": "user", "content": str(content)})
 
-        text = self.tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-
-        inputs = self.tokenizer(text, return_tensors='pt', truncation=True, max_length=4096)
-        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_tokens,
-                temperature=temperature if temperature > 0 else None,
-                top_p=0.9 if temperature > 0 else None,
-                do_sample=temperature > 0,
-                pad_token_id=self.tokenizer.pad_token_id,
+            text = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
             )
 
-        response = self.tokenizer.decode(
-            outputs[0][inputs['input_ids'].shape[1]:],
-            skip_special_tokens=True
-        ).strip()
+            inputs = self.tokenizer(text, return_tensors='pt', truncation=True, max_length=4096)
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
-        if return_resp:
-            resp = {'data': {'messages': [{'content': response}]}}
-            return response, resp
-        return response
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_tokens,
+                    temperature=temperature if temperature > 0 else None,
+                    top_p=0.9 if temperature > 0 else None,
+                    do_sample=temperature > 0,
+                    pad_token_id=self.tokenizer.pad_token_id,
+                )
+
+            response = self.tokenizer.decode(
+                outputs[0][inputs['input_ids'].shape[1]:],
+                skip_special_tokens=True
+            ).strip()
+
+            if return_resp:
+                resp = {'data': {'messages': [{'content': response}]}}
+                return response, resp
+            return response
+
+        except Exception as e:
+            print(f"❌ HuggingFaceJudgeClient error in get_eval:")
+            traceback.print_exc()
+            raise ValueError(f"HuggingFace judge model inference failed: {e}")
 
 
 def create_llm_client(use_llm_fallback: bool = True) -> Optional[object]:

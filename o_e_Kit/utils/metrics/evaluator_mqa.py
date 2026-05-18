@@ -642,8 +642,9 @@ class MQAEvaluator(BaseEvaluator):
     
     def __del__(self):
         """释放 Sentence Transformer 模型内存"""
-        if self.sentence_transformer is not None:
-            del self.sentence_transformer
+        st = getattr(self, 'sentence_transformer', None)
+        if st is not None:
+            del st
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
