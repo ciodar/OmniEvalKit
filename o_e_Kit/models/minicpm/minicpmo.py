@@ -158,15 +158,11 @@ class MiniCPM_o:
             if quantization != 'none':
                 print("  Pre-quantized model detected — ignoring --quantization flag, loading as-is")
         else:
-            if quantization == '4bit':
-                load_kwargs["load_in_4bit"] = True
-                load_kwargs["bnb_4bit_compute_dtype"] = torch.bfloat16
-                print("  Loading with BitsAndBytes 4-bit quantization")
-            elif quantization == '8bit':
-                load_kwargs["load_in_8bit"] = True
-                print("  Loading with BitsAndBytes 8-bit quantization")
-            else:
-                load_kwargs["torch_dtype"] = torch.bfloat16
+            if quantization != 'none':
+                print("  ⚠️ BitsAndBytes quantization is incompatible with MiniCPM-O's native "
+                      "MultiheadAttention in the vision resampler. For quantized inference, "
+                      "use a pre-quantized model (AWQ/GGUF) instead. Loading in BF16.")
+            load_kwargs["torch_dtype"] = torch.bfloat16
 
         if auto_device_map:
             if torch.distributed.is_initialized() and torch.distributed.get_world_size() > 1:

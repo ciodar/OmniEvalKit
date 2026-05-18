@@ -48,9 +48,11 @@ def add_model_args(parser: argparse.ArgumentParser):
 
     memory_group.add_argument("--auto_device_map", action="store_true",
                             help="自动将模型分片到所有可用GPU（使用 HuggingFace Accelerate device_map=\"auto\"）")
+    # MiniCPM-O: BitsAndBytes (4bit/8bit) is incompatible with the vision resampler's
+    # MultiheadAttention. Use pre-quantized AWQ/GGUF models instead (auto-detected).
     memory_group.add_argument("--quantization", type=str, default='none',
                             choices=['none', '4bit', '8bit'],
-                            help="模型量化方式：none（不量化）, 4bit（4位量化）, 8bit（8位量化）")
+                            help="量化方式（MiniCPM-O不支持BnB，请使用预量化AWQ/GGUF模型路径）")
     memory_group.add_argument("--attn_implementation", type=str, default=None,
                             choices=['flash_attention_2', 'sdpa', 'eager'],
                             help="注意力实现：flash_attention_2（推荐，大幅降低显存）, sdpa, eager")
