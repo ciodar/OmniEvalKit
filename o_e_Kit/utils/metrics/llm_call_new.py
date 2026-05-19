@@ -302,7 +302,7 @@ class HuggingFaceJudgeClient:
 
         import torch
         import traceback
-        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from transformers import AutoTokenizer
 
         print(f"🤗 Loading HF judge model: {self.model_path} on {self.device}...")
         try:
@@ -312,15 +312,27 @@ class HuggingFaceJudgeClient:
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_path,
-                torch_dtype=torch.bfloat16,
-                device_map='auto' if device == 'cuda' else None,
-                trust_remote_code=True,
-            )
+            # Try AutoModelForCausalLM first (text-only models), fall back to AutoModel (VL models)
+            from transformers import AutoModelForCausalLM, AutoModel
+            load_exc = None
+            for model_cls in (AutoModelForCausalLM, AutoModel):
+                try:
+                    self.model = model_cls.from_pretrained(
+                        self.model_path,
+                        torch_dtype=torch.bfloat16,
+                        trust_remote_code=True,
+                    )
+                    load_exc = None
+                    break
+                except Exception as exc:
+                    load_exc = exc
+                    continue
+
+            if load_exc is not None:
+                raise load_exc
+
+            self.model = self.model.to(device)
             self.model.eval()
-            if device != 'cuda':
-                self.model = self.model.to(device)
 
             print(f"✅ HF judge model loaded: {self.model_path}")
         except Exception as e:
