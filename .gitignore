@@ -175,6 +175,7 @@ core
 
 *.html
 
+models/
 /modeling_minicpmo/
 *.mp4
 **/monitor_state/**
@@ -202,3 +203,6 @@ terminals/
 # Data files (downloaded via scripts/hf_download.py)
 data/**
 !data/.gitkeep
+
+# Coding agents
+.pi/

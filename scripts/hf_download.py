@@ -34,6 +34,11 @@ sys.path.insert(0, SCRIPT_DIR)
 
 DEFAULT_REPO_ID = "OmniEvalKit/omnievalkit-dataset"
 
+# Override mapping for video source repos that have moved
+VIDEO_REPO_OVERRIDES = {
+    "DailyOmni/Daily-Omni": "liarliar/Daily-Omni",
+}
+
 
 def get_hf_api():
     try:
@@ -132,15 +137,39 @@ def download_and_restore_dataset(
     try:
         split = ds_info.get("split", "test")
         downloaded_files = []
-        for i in range(num_shards):
-            shard_name = f"{hf_path}/{split}-{i:05d}-of-{num_shards:05d}.parquet"
-            local = hf_hub_download(
-                repo_id=repo_id,
-                filename=shard_name,
-                cache_dir=cache_dir,
-                repo_type="dataset",
+        # Auto-detect shards from the repo, falling back to num_shards from dataset_info
+        try:
+            api, _, _ = get_hf_api()
+            all_files = api.list_repo_files(repo_id=repo_id, repo_type="dataset")
+            prefix = f"{hf_path}/{split}-"
+            shard_files = sorted(
+                f for f in all_files
+                if f.startswith(prefix) and f.endswith(".parquet")
             )
-            downloaded_files.append(local)
+        except Exception:
+            shard_files = []
+        if shard_files:
+            detected_shards = len(shard_files)
+            if detected_shards != num_shards:
+                print(f"  auto-detected {detected_shards} shards (dataset_info says {num_shards})")
+            for shard_name in shard_files:
+                local = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=shard_name,
+                    cache_dir=cache_dir,
+                    repo_type="dataset",
+                )
+                downloaded_files.append(local)
+        else:
+            for i in range(num_shards):
+                shard_name = f"{hf_path}/{split}-{i:05d}-of-{num_shards:05d}.parquet"
+                local = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=shard_name,
+                    cache_dir=cache_dir,
+                    repo_type="dataset",
+                )
+                downloaded_files.append(local)
         
         if len(downloaded_files) > 1:
             merged_dir = os.path.join(tmp_dir, "shards")
@@ -190,6 +219,7 @@ def download_videos_for_dataset(ds_info: Dict[str, Any], output_dir: str):
     
     if src_type == "hf_dataset":
         repo_id = video_source.get("repo_id", "")
+        repo_id = VIDEO_REPO_OVERRIDES.get(repo_id, repo_id)
         instructions = video_source.get("instructions", "")
         print(f"  视频来源: {repo_id}")
         print(f"  操作说明: {instructions}")

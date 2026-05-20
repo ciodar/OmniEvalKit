@@ -26,6 +26,7 @@ Parquet to JSONL 转换脚本（含媒体文件恢复）
 import os
 import sys
 import json
+import gc
 import glob as glob_module
 import argparse
 from pathlib import Path
@@ -33,6 +34,7 @@ from typing import List, Dict, Any, Optional
 
 try:
     import pandas as pd
+    import pyarrow as pa
     import pyarrow.parquet as pq
 except ImportError:
     print("请先安装依赖: pip install pandas pyarrow")
@@ -56,6 +58,17 @@ def try_parse_json(value: str) -> Any:
             pass
     
     return value
+
+
+def convert_bytes_for_json(obj: Any) -> Any:
+    """递归移除/转换 JSON 不支持的 bytes 类型"""
+    if isinstance(obj, bytes):
+        return "<bytes>"
+    elif isinstance(obj, dict):
+        return {k: convert_bytes_for_json(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_bytes_for_json(item) for item in obj]
+    return obj
 
 
 def write_file_bytes(file_path: str, data: bytes) -> bool:
@@ -109,34 +122,38 @@ def read_parquet_sharded(input_path: str) -> pd.DataFrame:
         dfs = []
 
         for f in files:
-            print(f"Processing: {f}")
+            print(f"  Processing: {f}")
             pf = pq.ParquetFile(f)
             schema = pf.schema_arrow
 
-            # Drop nested columns to avoid Arrow/Pandas conversion issues
-            nested_cols = [
+            struct_cols = [
                 field.name
                 for field in schema
-                if pa.types.is_nested(field.type)
+                if pa.types.is_struct(field.type)
             ]
-
-            if nested_cols:
-                print(f"Skipping nested columns: {nested_cols}")
-
-            safe_cols = [
+            simple_cols = [
                 name for name in schema.names
-                if name not in nested_cols
+                if name not in struct_cols
             ]
+
+            if struct_cols:
+                print(f"  Struct columns (preserved as dicts): {struct_cols}")
 
             for rg_idx in range(pf.num_row_groups):
                 table = pf.read_row_group(
                     rg_idx,
-                    columns=safe_cols,
+                    columns=schema.names,
                     use_threads=False,
                 )
 
-                # Reduce peak memory during conversion
-                df = table.to_pandas(split_blocks=True, self_destruct=True)
+                df = table.select(simple_cols).to_pandas(
+                    split_blocks=True, self_destruct=True
+                )
+
+                for col_name in struct_cols:
+                    col_array = table.column(col_name)
+                    df[col_name] = [col_array[i].as_py() for i in range(len(col_array))]
+
                 dfs.append(df)
 
                 del table, df
@@ -184,6 +201,7 @@ def parquet_to_jsonl(
     stats = {
         "audio_restored": 0,
         "image_restored": 0,
+        "video_restored": 0,
     }
     
     os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
@@ -241,6 +259,17 @@ def parquet_to_jsonl(
                     if write_file_bytes(full_path, image_data):
                         stats["image_restored"] += 1
 
+                # HF struct 格式: video = {"bytes": b'...', "path": "xxx.mp4"}
+                if 'video' in record and isinstance(record.get('video'), dict):
+                    video_struct = record['video']
+                    video_data = video_struct.get('bytes')
+                    video_path = video_struct.get('path') or record.get('VideoPath') or record.get('video_path')
+                    del record['video']
+                    if video_data is not None and video_path:
+                        full_path = os.path.join(effective_media_dir, video_path)
+                        if write_file_bytes(full_path, video_data):
+                            stats["video_restored"] += 1
+
                 for bytes_field, path_field in [
                     ('audio_bytes_dict', 'audio_paths_dict'),
                     ('image_bytes_dict', 'image_paths_dict'),
@@ -265,11 +294,14 @@ def parquet_to_jsonl(
             
             # 移除所有媒体字段
             record = {k: v for k, v in record.items()
-                      if k not in ('audio', 'image')
+                      if k not in ('audio', 'image', 'video')
                       and not k.endswith('_bytes') and not k.endswith('_bytes_dict')}
             
             # 尝试恢复嵌套结构
             record = {k: try_parse_json(v) for k, v in record.items()}
+            
+            # 确保所有值可 JSON 序列化（处理漏网的 bytes、nested 等）
+            record = convert_bytes_for_json(record)
             
             f.write(json.dumps(record, ensure_ascii=False) + '\n')
     
@@ -332,7 +364,7 @@ def convert_directory(
                 stats = result.get("stats", {})
                 print(f"  ✓ {result['count']} 条")
                 if restore_media:
-                    print(f"    恢复: 音频 {stats.get('audio_restored', 0)}, 图片 {stats.get('image_restored', 0)}")
+                    print(f"    恢复: 音频 {stats.get('audio_restored', 0)}, 图片 {stats.get('image_restored', 0)}, 视频 {stats.get('video_restored', 0)}")
         except Exception as e:
             print(f"  ✗ 失败: {e}")
             import traceback
