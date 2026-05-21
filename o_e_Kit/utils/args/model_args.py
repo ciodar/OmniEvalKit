@@ -26,9 +26,10 @@ def add_model_args(parser: argparse.ArgumentParser):
                                'minicpmo',              # MiniCPM-O 统一模型
                                'minicpmo_duplex_demo',  # MiniCPM-O Duplex Demo
                                'whisper',               # Whisper ASR
-                               'qwen3_omni',            # Qwen3-Omni 多模态理解模型
-                               'gemini_omni',           # Gemini 多模态 API 评测模型
-                           ],
+                                'qwen3_omni',            # Qwen3-Omni 多模态理解模型
+                                'gemini_omni',           # Gemini 多模态 API 评测模型
+                                'gemma4_omni',           # Gemma 4 多模态模型 (E2B/E4B)
+                            ],
                            help="使用的模型逻辑类型")
                            
     model_group.add_argument("--auto_device_map", action="store_true",

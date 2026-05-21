@@ -71,3 +71,38 @@ General-purpose generation method.
 ### Capabilities & Use Cases
 
 `GeminiOmniApiEvalModel` evaluates via the Gemini API through an OpenAI-compatible gateway, using a unified `generate` inference interface.
+
+## 6. `Gemma4OmniEvalModel` (Gemma 4 Multi-modal Model)
+
+-   **File path**: `o_e_Kit/models/gemma4/gemma4_omni.py`
+-   **Model type string**: `"gemma4_omni"`
+
+### Capabilities & Use Cases
+
+`Gemma4OmniEvalModel` is the evaluation wrapper for Google's **Gemma 4** models (E2B and E4B variants). It supports text, image, video, and audio input natively through HuggingFace Transformers. Video frames are extracted using the existing `load_video()` utility, and audio is loaded using `load_audio()`.
+
+### Core Methods
+
+#### `generate(self, dataset_name, paths, items, modality)`
+
+Unified generation method for multimodal evaluation.
+
+-   **Invocation**: Called when `--generate_method` is set to `"generate"`.
+-   **Input**:
+    -   `dataset_name`: Dataset name for config lookup.
+    -   `paths`: List of media path dictionaries.
+    -   `items`: List of annotation dictionaries.
+    -   `modality`: Modality type (`"omni"`, `"audio"`, `"video"`, `"image"`).
+-   **Output**: `list[dict]` — Model predictions with `response` and `sequence` fields.
+
+### Usage Example
+
+```bash
+python eval_main.py \
+    --model_type gemma4_omni \
+    --model_path google/gemma-4-E2B-it \
+    --model_name gemma-4-E2B-it \
+    --generate_method generate \
+    --attn_implementation sdpa \
+    --eval_daily_omni --eval_omnibench
+```

@@ -120,6 +120,32 @@ def load_model(args, device, duplex_type=None):
                 args, "dataset_generation_config_path", None
             ),
         )
+    elif args.model_type == 'gemma4_omni':
+        # Gemma 4 多模态模型 (E2B/E4B)，通过 HuggingFace Transformers 加载
+        from o_e_Kit.models.gemma4.gemma4_omni import Gemma4OmniEvalModel
+
+        if not getattr(args, "generate_method", None):
+            args.generate_method = "generate"
+        else:
+            if args.generate_method != "generate":
+                print(
+                    f"⚠️ gemma4_omni 仅支持 generate 推理，"
+                    f"已将 generate_method='{args.generate_method}' 覆盖为 'generate'"
+                )
+                args.generate_method = "generate"
+
+        model = Gemma4OmniEvalModel(
+            model_path=args.model_path,
+            device=device,
+            dataset_generation_config_path=getattr(
+                args, "dataset_generation_config_path", None
+            ),
+            auto_device_map=getattr(args, "auto_device_map", False),
+            quantization=getattr(args, "quantization", "none"),
+            attn_implementation=getattr(args, "attn_implementation", None),
+            max_inp_length=getattr(args, "max_inp_length", 32768),
+            cpu_offload=getattr(args, "cpu_offload", False),
+        )
     else:
         raise ValueError(f"Unsupported model type: {args.model_type}")
     
