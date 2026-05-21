@@ -201,6 +201,7 @@ output/
 terminals/
 
 # Data files (downloaded via scripts/hf_download.py)
+data
 data/**
 models
 
