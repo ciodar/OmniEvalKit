@@ -52,24 +52,6 @@ def add_model_args(parser: argparse.ArgumentParser):
     generation_group.add_argument("--dataset_generation_config_path", type=str, default=None,
                                 help="数据集生成配置JSON文件路径，用于自定义各数据集的prompt和生成参数")
 
-    # 内存优化参数
-    memory_group = parser.add_argument_group('内存优化', '显存优化相关参数（多GPU分片、量化、注意力实现）')
-
-    memory_group.add_argument("--auto_device_map", action="store_true",
-                            help="自动将模型分片到所有可用GPU（使用 HuggingFace Accelerate device_map=\"auto\"）")
-    # MiniCPM-O: BitsAndBytes (4bit/8bit) is incompatible with the vision resampler's
-    # MultiheadAttention. Use pre-quantized AWQ/GGUF models instead (auto-detected).
-    memory_group.add_argument("--quantization", type=str, default='none',
-                            choices=['none', '4bit', '8bit'],
-                            help="量化方式（MiniCPM-O不支持BnB，请使用预量化AWQ/GGUF模型路径）")
-    memory_group.add_argument("--attn_implementation", type=str, default=None,
-                            choices=['flash_attention_2', 'sdpa', 'eager'],
-                            help="注意力实现：flash_attention_2（推荐，大幅降低显存）, sdpa, eager")
-    memory_group.add_argument("--max_inp_length", type=int, default=32768,
-                            help="最大输入长度（token数），影响KV Cache显存占用。长视频/音频任务可降低此值")
-    memory_group.add_argument("--cpu_offload", action="store_true",
-                            help="启用CPU卸载（将部分模型层卸载到CPU内存，适合GPU显存不足时使用）")
-
 def get_model_args():
     """获取仅包含模型参数的解析器（用于测试）"""
     parser = argparse.ArgumentParser(description="模型参数配置")
