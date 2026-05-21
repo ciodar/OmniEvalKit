@@ -175,7 +175,7 @@ core
 
 *.html
 
-models/
+/models
 /modeling_minicpmo/
 *.mp4
 **/monitor_state/**
@@ -195,7 +195,7 @@ output_2*
 test_output/
 visualization_output/
 output/
-^models/
+
 
 # Terminals
 terminals/
@@ -203,7 +203,6 @@ terminals/
 # Data files (downloaded via scripts/hf_download.py)
 data
 data/**
-models
 
 # Coding agents
 .pi/

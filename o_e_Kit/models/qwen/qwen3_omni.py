@@ -137,6 +137,12 @@ class Qwen3OmniEvalModel:
             ),
             "system_prompt": config.get("system_prompt", ""),
             "load_av": bool(config.get("load_av", False)),
+            "num_beams": int(config.get("num_beams", 1)),
+            "do_sample": bool(config.get("sampling", False)),
+            "temperature": float(config.get("temperature", 1.0)),
+            "top_p": float(config.get("top_p", 1.0)),
+            "top_k": int(config.get("top_k", 50)),
+            "repetition_penalty": float(config.get("repetition_penalty", 1.0)),
         }
 
     def _build_options_prompt(self, choices: List[str]) -> str:
@@ -308,6 +314,12 @@ class Qwen3OmniEvalModel:
                 thinker_return_dict_in_generate=True,
                 use_audio_in_video=use_audio_in_video,
                 max_new_tokens=int(gen_config.get("max_tokens", 256)),
+                num_beams=int(gen_config.get("num_beams", 1)),
+                do_sample=bool(gen_config.get("do_sample", False)),
+                temperature=float(gen_config.get("temperature", 1.0)),
+                top_p=float(gen_config.get("top_p", 1.0)),
+                top_k=int(gen_config.get("top_k", 50)),
+                repetition_penalty=float(gen_config.get("repetition_penalty", 1.0)),
             )
 
             # 解码文本（与官方示例一致：跳过 prompt 部分）
