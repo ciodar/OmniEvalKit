@@ -49,12 +49,16 @@ dependencies = [
     "huggingface-hub",
     "pyarrow",
     "decord",
-    "transformers==4.57.3",
+    "ffmpeg-python",
+    "transformers>=5.5.0",  # upgraded to >=5.5.0 after uv sync via uv pip install in the SLURM script
     "pillow",
     "absl-py",
     "accelerate",
     "bitsandbytes",
-    "protobuf"
+    "protobuf",
+    "torch",
+    "torchvision",
+    "torchaudio"
 ]
 
 [project.optional-dependencies]
@@ -65,11 +69,14 @@ api = [
     "websockets==12.0",
 ]
 embedding = [
-    "sentence-transformers==2.7.0",
+    "sentence-transformers",
 ]
 dev = [
     "pytest",
     "pre-commit",
+]
+opencv = [
+    "opencv-python-headless"
 ]
 all = [
     "omnievalkit[api,embedding,dev]",
@@ -80,5 +87,22 @@ Homepage = "https://github.com/OpenBMB/OmniEvalKit"
 Repository = "https://github.com/OpenBMB/OmniEvalKit"
 Issues = "https://github.com/OpenBMB/OmniEvalKit/issues"
 
+
 [tool.hatch.build.targets.wheel]
 packages = ["o_e_Kit"]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchaudio = [
+  { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+explicit = true
