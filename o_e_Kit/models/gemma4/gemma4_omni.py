@@ -284,7 +284,7 @@ class Gemma4OmniEvalModel:
                 return_dict=True,
                 return_tensors="pt",
                 add_generation_prompt=True,
-                do_sample_frames=False,
+                processor_kwargs={"do_sample_frames": False},
             ).to(self.device, dtype=self.model.dtype)
 
             try:
