@@ -511,6 +511,13 @@ def load_dataset(args, dataset_name, current_task=None):
             data_prefix_dir=args.avmeme_main_data_prefix_dir,
             dataset_name=dataset_name
         )
+    elif dataset_name in ["omniduplexeval_rtd", "omniduplexeval_pr"]:
+        # Omni-DuplexEval: Real-time Description / Proactive Reminder
+        dataset = OmniEvalDataset(
+            annotation_path=getattr(args, f"{dataset_name}_annotation_path"),
+            data_prefix_dir=getattr(args, f"{dataset_name}_data_prefix_dir"),
+            dataset_name=dataset_name
+        )
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     

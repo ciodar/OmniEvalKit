@@ -296,6 +296,28 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
+    # Omni-DuplexEval Real-time Description 评估（推理 + 保存原始输出，评估由外部 OmniDuplexEval 脚本处理）
+    if getattr(args, 'eval_omniduplexeval_rtd', False):
+        dataset = load_dataset(args, "omniduplexeval_rtd")
+        result['omniduplexeval_rtd'] = infer_and_evaluate(
+            model, dataset, args.model_name, "omniduplexeval_rtd", time,
+            answer_path=args.answer_path, batch_size=args.batchsize,
+            generate_method=args.generate_method,
+            evaluate=False,
+            async_evaluate=async_evaluate
+        )
+    
+    # Omni-DuplexEval Proactive Reminder 评估（推理 + 保存原始输出，评估由外部 OmniDuplexEval 脚本处理）
+    if getattr(args, 'eval_omniduplexeval_pr', False):
+        dataset = load_dataset(args, "omniduplexeval_pr")
+        result['omniduplexeval_pr'] = infer_and_evaluate(
+            model, dataset, args.model_name, "omniduplexeval_pr", time,
+            answer_path=args.answer_path, batch_size=args.batchsize,
+            generate_method=args.generate_method,
+            evaluate=False,
+            async_evaluate=async_evaluate
+        )
+    
     return result
 
 

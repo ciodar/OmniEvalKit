@@ -798,6 +798,32 @@ DATASET_REGISTRY = [
         },
         description="AVMeme-Exam Main: 去除 text_cheat 后的数据集 (846 samples, 118 visual_cheat)"
     ),
+    
+    # Omni-DuplexEval: Real-time Description
+    DatasetConfig(
+        name="omniduplexeval_rtd",
+        display_name="Omni-DuplexEval Real-time Description",
+        category="omni_duplex",
+        subcategory="real_time_description",
+        paths={
+            "data_prefix_dir": "./data/omni/raw_hf/omniduplexeval/",
+            "annotation_path": "./data/omni/raw_hf/omniduplexeval/rtd.jsonl"
+        },
+        description="Omni-DuplexEval Real-time Description: evaluates real-time video description with temporal sensitivity and content accuracy"
+    ),
+    
+    # Omni-DuplexEval: Proactive Reminder
+    DatasetConfig(
+        name="omniduplexeval_pr",
+        display_name="Omni-DuplexEval Proactive Reminder",
+        category="omni_duplex",
+        subcategory="proactive_reminder",
+        paths={
+            "data_prefix_dir": "./data/omni/raw_hf/omniduplexeval/",
+            "annotation_path": "./data/omni/raw_hf/omniduplexeval/pr.jsonl"
+        },
+        description="Omni-DuplexEval Proactive Reminder: evaluates proactive event reminders, post-event reminders, and correction-style proactive responses"
+    ),
 ]
 
 # 额外的静态配置
