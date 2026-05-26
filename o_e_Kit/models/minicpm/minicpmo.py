@@ -143,7 +143,41 @@ class MiniCPM_o:
         # 禁用 TTS 头：评估模式下不需要 TTS 输出，且与量化/多卡分片存在兼容性问题
         if hasattr(config, 'init_tts'):
             config.init_tts = False
+            # Also null out tts_config to prevent TTS module initialization entirely
+            if hasattr(config, 'tts_config'):
+                config.tts_config = None
             print("  init_tts set to False (TTS disabled for evaluation)")
+
+        # transformers 5.x expects all_tied_weights_keys as a settable instance
+        # attribute (set in post_init()). MiniCPMO's remote code (4.x era) never
+        # calls post_init(), so the attribute is missing during _finalize_model_loading.
+        # We add a descriptor that supports both get and set, with lazy computation
+        # for models that miss post_init().
+        from transformers.modeling_utils import PreTrainedModel
+        if not hasattr(PreTrainedModel, 'all_tied_weights_keys'):
+            class _AllTiedWeightsKeysDescriptor:
+                def __get__(self, obj, objtype=None):
+                    if obj is None:
+                        return self
+                    if '_all_tied_weights_keys' in obj.__dict__:
+                        return obj.__dict__['_all_tied_weights_keys']
+                    if hasattr(obj, 'get_expanded_tied_weights_keys'):
+                        result = obj.get_expanded_tied_weights_keys(all_submodels=False)
+                    else:
+                        result = {}
+                        for cls in type(obj).__mro__:
+                            if '_tied_weights_keys' in cls.__dict__:
+                                tied = cls.__dict__['_tied_weights_keys']
+                                if isinstance(tied, (list, tuple)):
+                                    for k in tied:
+                                        result[k] = k
+                                elif isinstance(tied, dict):
+                                    result.update(tied)
+                    obj.__dict__['_all_tied_weights_keys'] = result
+                    return result
+                def __set__(self, obj, value):
+                    obj.__dict__['_all_tied_weights_keys'] = value
+            PreTrainedModel.all_tied_weights_keys = _AllTiedWeightsKeysDescriptor()
 
         if is_quantized:
             if quantization != 'none':
