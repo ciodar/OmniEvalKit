@@ -308,7 +308,9 @@ class Qwen3OmniEvalModel:
 
             # Official:
             # text_ids, audio = model.generate(..., thinker_return_dict_in_generate=True, use_audio_in_video=USE_AUDIO_IN_VIDEO)
-            text_ids, audio_out = self.model.generate(
+            # Note: when talker is disabled, generate() returns a single GenerateDecoderOnlyOutput
+            # (an OrderedDict), NOT a tuple. Unpacking would iterate over keys and give string keys.
+            output = self.model.generate(
                 **inputs,
                 speaker="Ethan",
                 thinker_return_dict_in_generate=True,
@@ -325,7 +327,12 @@ class Qwen3OmniEvalModel:
             # 解码文本（与官方示例一致：跳过 prompt 部分）
             try:
                 input_len = inputs["input_ids"].shape[1]
-                sequences = text_ids.sequences  # type: ignore[attr-defined]
+                # Talker enabled -> output is (sequences_tensor, audio_tensor)
+                # Talker disabled -> output is GenerateDecoderOnlyOutput with .sequences
+                if isinstance(output, tuple):
+                    sequences = output[0]
+                else:
+                    sequences = output.sequences
                 decoded = self.processor.batch_decode(
                     sequences[:, input_len:],
                     skip_special_tokens=True,

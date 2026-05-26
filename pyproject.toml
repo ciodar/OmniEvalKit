@@ -56,9 +56,9 @@ dependencies = [
     "accelerate",
     "bitsandbytes",
     "protobuf",
-    "torch",
+    "torch==2.7.0",
     "torchvision",
-    "torchaudio"
+    "torchaudio",
 ]
 
 [project.optional-dependencies]
@@ -68,8 +68,14 @@ api = [
     "azure-core",
     "websockets==12.0",
 ]
+flash-attn = [
+    "flash-attn"
+]
 embedding = [
     "sentence-transformers",
+]
+qwen = [
+    "qwen-omni-utils>=0.0.1"
 ]
 dev = [
     "pytest",
@@ -101,6 +107,7 @@ torchvision = [
 torchaudio = [
   { index = "pytorch-cu126", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3/flash_attn-2.8.3+cu12torch2.7cxx11abiTRUE-cp311-cp311-linux_x86_64.whl" }
 
 [[tool.uv.index]]
 name = "pytorch-cu126"
