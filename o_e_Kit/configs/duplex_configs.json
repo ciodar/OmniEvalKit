@@ -183,5 +183,94 @@
                 "_comment": "OV-AVEL Test: Full test set with base and novel categories"
             }
         }
+    },
+    "omniduplexeval_configs": {
+        "rtd": {
+            "_comment": "Real-Time Description tasks: stream video frames + audio and describe events as they happen",
+            "omniduplexeval_rtd_world_knowledge": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions of what is happening right now. Include timestamps. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_rtd_counting": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions of what is happening right now. Pay special attention to counts and quantities. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_rtd_fine_grained_movement": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions of fine-grained movements and actions. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_rtd_interaction_relation": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions of interactions and relationships between objects/people. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_rtd_ocr": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions. Read any visible text. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_rtd_omni": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a real-time video describer. Watch the video as it streams in and output sentence-by-sentence descriptions integrating both visual and audio information. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            }
+        },
+        "pr": {
+            "_comment": "Proactive Reminder tasks: monitor video and output reminders or corrections at appropriate times",
+            "omniduplexeval_pr_correction": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a proactive correction system. The user instruction contains an incorrect statement about the video. Monitor the video and identify the error, then provide the correct information. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_pr_event_reminder": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a proactive reminder system. Monitor the video and when the target event described by the user occurs, output a clear reminder notification. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            },
+            "omniduplexeval_pr_post_event_reminder": {
+                "mode": "omni",
+                "prefix_system_prompt": "You are a proactive post-event notification system. Monitor the video and immediately after the target event occurs, output a notification that the event has happened. User instruction: {question_text}",
+                "suffix_system_prompt": "",
+                "pad_audio": true,
+                "pad_frame": true,
+                "use_template_substitution": true,
+                "frame_fps": 1
+            }
+        }
     }
 }

@@ -299,6 +299,96 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
     return result
 
 
+def evaluate_omniduplexeval_datasets(args, model, time: str) -> Dict[str, Any]:
+    """Evaluate Omni-DuplexEval benchmark: streaming inference + response export.
+
+    The model processes each sample via duplex streaming generation and
+    saves timestamped responses to ``{response_root}/{split}/{id}.json``.
+    Evaluation is performed separately using upstream Omni-DuplexEval scripts.
+    """
+    result: Dict[str, Any] = {}
+    if not getattr(args, "eval_omniduplexeval", False):
+        return result
+
+    if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
+        return result
+
+    from o_e_Kit.datasets.omniduplexeval_dataset import OmniDuplexEvalDataset, ALL_SPLITS
+    from o_e_Kit.utils.omniduplexeval_inference import infer_omniduplexeval
+
+    split_filter = getattr(args, "omniduplexeval_splits", ["all"])
+    resolved_splits = _resolve_omniduplexeval_splits(split_filter)
+    hf_dataset = getattr(args, "omniduplexeval_hf_dataset", "Hothan/Omni-DuplexEval")
+    response_root = getattr(args, "omniduplexeval_response_root", "./results/omniduplexeval_responses")
+    retain_media = getattr(args, "omniduplexeval_retain_media", False)
+    max_samples = getattr(args, "max_sample_num", None)
+
+    print("\n" + "=" * 60)
+    print("【开始评估 Omni-DuplexEval 基准测试】")
+    print(f"  HF Dataset: {hf_dataset}")
+    print(f"  Splits: {resolved_splits}")
+    print(f"  Response Root: {response_root}")
+    print("=" * 60)
+
+    for split in resolved_splits:
+        media_dir = os.path.join(response_root, "_media", split)
+        dataset = OmniDuplexEvalDataset(
+            hf_dataset_name=hf_dataset,
+            split=split,
+            media_dir=media_dir,
+            max_samples=max_samples,
+        )
+
+        print(f"\n  Processing split '{split}': {len(dataset)} samples")
+        split_results = infer_omniduplexeval(
+            model=model,
+            dataset=dataset,
+            response_root=response_root,
+            dataset_name=f"omniduplexeval_{split.lower()}",
+            skip_existing=True,
+        )
+
+        success_count = sum(1 for r in split_results if r["status"] == "success")
+        skip_count = sum(1 for r in split_results if r["status"] == "skipped")
+        fail_count = sum(1 for r in split_results if r["status"] == "failed")
+        print(f"  Split '{split}' done: {success_count} success, {skip_count} skipped, {fail_count} failed")
+
+        if not retain_media:
+            dataset.cleanup_media(keep=False)
+
+        result[f"omniduplexeval_{split.lower()}"] = {
+            "split": split,
+            "total": len(split_results),
+            "success": success_count,
+            "skipped": skip_count,
+            "failed": fail_count,
+        }
+
+    return result
+
+
+def _resolve_omniduplexeval_splits(split_filter: list) -> list:
+    """Resolve split filter list into concrete split names."""
+    from o_e_Kit.datasets.omniduplexeval_dataset import ALL_SPLITS, RTD_SPLITS, PR_SPLITS
+
+    resolved = []
+    for item in split_filter or ["all"]:
+        item_lower = item.lower()
+        if item_lower == "all":
+            return list(ALL_SPLITS)
+        elif item_lower == "rtd":
+            resolved.extend(RTD_SPLITS)
+        elif item_lower == "pr":
+            resolved.extend(PR_SPLITS)
+        elif item in ALL_SPLITS:
+            resolved.append(item)
+        else:
+            print(f"  Warning: Unknown Omni-DuplexEval split '{item}', ignoring")
+    # Deduplicate while preserving order
+    seen = set()
+    return [s for s in resolved if not (s in seen or seen.add(s))]
+
+
 def run_all_evaluations(args, model, device, time, async_evaluate: bool = True):
     """运行所有评估任务
     
@@ -354,6 +444,16 @@ def run_all_evaluations(args, model, device, time, async_evaluate: bool = True):
     result.update(omni_results)
     if omni_results:
         print(f"完成{len(omni_results)}个Omni数据集{'推理' if async_evaluate else '评估'}")
+    
+    # 评估 Omni-DuplexEval 基准测试（流式推理 + 响应导出）
+    if getattr(args, 'eval_omniduplexeval', False):
+        print("\n" + "="*60)
+        print("【开始评估 Omni-DuplexEval 基准测试】")
+        print("="*60)
+        duplex_eval_results = evaluate_omniduplexeval_datasets(args, model, time)
+        result.update(duplex_eval_results)
+        if duplex_eval_results:
+            print(f"完成 {len(duplex_eval_results)} 个 Omni-DuplexEval 分片")
     
     # 异步模式下，等待所有评估任务完成
     if async_evaluate:

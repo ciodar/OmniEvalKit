@@ -798,6 +798,18 @@ DATASET_REGISTRY = [
         },
         description="AVMeme-Exam Main: 去除 text_cheat 后的数据集 (846 samples, 118 visual_cheat)"
     ),
+
+    # Omni-DuplexEval 基准测试（使用 HF datasets 流式加载）
+    # 数据集来源: https://huggingface.co/datasets/Hothan/Omni-DuplexEval
+    DatasetConfig(
+        name="omniduplexeval",
+        display_name="Omni-DuplexEval",
+        category="omni_duplex",
+        subcategory="streaming_describe_remind",
+        paths={},
+        default_enabled=False,
+        description="Omni-DuplexEval: real-time duplex omni-modal interaction benchmark (RTD + PR tasks, loaded from HF datasets)"
+    ),
 ]
 
 # 额外的静态配置
@@ -818,6 +830,13 @@ STATIC_CONFIGS: Dict[str, Any] = {
     "duplex_insert_vad": False,
     "duplex_audio_normalize": False,
     "duplex_stable_audio_token_interval": True,
+
+    # Omni-DuplexEval 配置
+    "omniduplexeval_hf_dataset": "Hothan/Omni-DuplexEval",
+    "omniduplexeval_splits": ["all"],
+    "omniduplexeval_response_root": "./results/omniduplexeval_responses",
+    "omniduplexeval_retain_media": False,
+    "omniduplexeval_fps": 1,
 }
 
 
@@ -857,6 +876,18 @@ def add_dataset_args(parser: argparse.ArgumentParser):
     dataset_group.add_argument("--livecc_data_type", type=str, default="clipped", 
                               choices=["clipped", "frames"],
                               help="LiveCC数据类型：clipped (默认使用test_cc_clipped.jsonl) 或 frames (使用test_cc_frames_1fps.jsonl)")
+    
+    # Omni-DuplexEval 参数
+    dataset_group.add_argument("--omniduplexeval_hf_dataset", type=str, default="Hothan/Omni-DuplexEval",
+                              help="Omni-DuplexEval HuggingFace 数据集名称")
+    dataset_group.add_argument("--omniduplexeval_splits", type=str, nargs="*", default=["all"],
+                              help="Omni-DuplexEval 分片列表: all (全部9分片), rtd (6个RTD分片), pr (3个PR分片), 或具体分片名")
+    dataset_group.add_argument("--omniduplexeval_response_root", type=str, default="./results/omniduplexeval_responses",
+                              help="Omni-DuplexEval 模型响应保存根目录")
+    dataset_group.add_argument("--omniduplexeval_retain_media", action="store_true", default=False,
+                              help="保留已物化的媒体文件（默认在结束后清理）")
+    dataset_group.add_argument("--omniduplexeval_fps", type=int, default=1,
+                              help="Omni-DuplexEval 流式推理帧率（每秒帧数）")
 
 
 def add_evaluation_flags(parser: argparse.ArgumentParser):

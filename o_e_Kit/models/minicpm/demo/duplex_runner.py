@@ -9,6 +9,7 @@ listen: <unit><image><unk></image><audio>x10<listen></unit>
 end of turn: <unit><image><unk></image><audio>x10<speak>xxxx<turn_eos><chunk_eos></unit>
 '''
 import os
+import re
 import subprocess
 import torch
 import json
@@ -291,6 +292,14 @@ class OmniDuplex(Duplex):
         if config.get('use_question_as_prompt', False) and '{question}' in prefix_prompt:
             question = items[0].get('question', '')
             sys_prompt = sys_prompt.format(question=question)
+        
+        # General template substitution: replace {key} with corresponding item field
+        if config.get('use_template_substitution', True):
+            for template_key in re.findall(r'\{(\w+)\}', sys_prompt):
+                if template_key not in ('title', 'previous', 'question'):
+                    value = items[0].get(template_key, '')
+                    if value:
+                        sys_prompt = sys_prompt.replace(f'{{{template_key}}}', str(value))
         
         sys_prompt += '<|im_end|>'
         
