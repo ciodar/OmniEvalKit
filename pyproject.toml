@@ -50,7 +50,7 @@ dependencies = [
     "pyarrow",
     "decord",
     "ffmpeg-python",
-    "transformers>=5.5.0",  # upgraded to >=5.5.0 after uv sync via uv pip install in the SLURM script
+    "transformers==4.57.6",  # upgraded to >=5.5.0 after uv sync via uv pip install in the SLURM script
     "pillow",
     "absl-py",
     "accelerate",

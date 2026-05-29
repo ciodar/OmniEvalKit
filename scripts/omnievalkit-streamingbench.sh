@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J test-omnievalkit-gemma-e2b     # job name
+#SBATCH -J streamingbench-minicpmo    # job name
 #SBATCH -o %x.o%j            # single STDOUT/STDERR output file jobname.o<job number>
 #SBATCH -p gpushort          # request gpushort partition
 #SBATCH -n 8                 # 8 cores
@@ -9,6 +9,8 @@
 #SBATCH --gres=gpu:1         # request 1 GPU of any type
 #SBATCH --constraint=ampere|hopper
 
+# Long queue SBATCH -p sae          # request gpushort partition
+# Long queue SBATCH -A pilot_sae_gpu
 echo "Allocated GPU: $SLURM_JOB_GPUS"
 
 module load cuda
@@ -80,11 +82,11 @@ GPUS_PER_NODE=1
 BATCH_SIZE=1
 MAX_SAMPLES="500"
 GENERATE_METHOD="chat"
-CONFIG_PATH="./configs/model_config/minicpmo45_batch_1poolstep.json"
+# CONFIG_PATH="./configs/model_config/minicpmo45_batch_1poolstep.json"
 # ===================== 评测数据集选择（取消注释你需要的场景） =====================
 
 # --- 场景 1: ASR 语音识别 ---
-EVAL_DATASETS=" --eval_daily_omni"
+EVAL_DATASETS=" --eval_streamingbench --streamingbench_tasks sqa"
 
 OPT_ARGS=""
 OPT_ARGS+=" --model_path ${MODEL_PATH}"

@@ -29,7 +29,7 @@ def evaluate_video_datasets(args, model, device, time, async_evaluate: bool = Fa
     if args.eval_streamingbench:
         for task in args.streamingbench_tasks:
             dataset = load_dataset(args, "StreamingBench", task)
-            result_key = f'StreamingBench-{task.upper()}'
+            result_key = f'streamingbench_{task}'
             
             # 根据任务类型选择推理方法
             if task == "proactive":
@@ -44,7 +44,7 @@ def evaluate_video_datasets(args, model, device, time, async_evaluate: bool = Fa
                 answer_path=args.answer_path, batch_size=args.batchsize, generate_method=generate_method,
                 async_evaluate=async_evaluate
             )
-            print(f"StreamingBench-{task.upper()}{'推理' if async_evaluate else '评估'}完成")
+            print(f"StreamingBench-{task}{'推理' if async_evaluate else '评估'}完成")
     
     return result
 

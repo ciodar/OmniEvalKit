@@ -1,21 +1,22 @@
 #!/bin/bash
-#SBATCH -J test-omnievalkit-gemma-e2b     # job name
+#SBATCH -J omnievalkit-gemma      # job name
 #SBATCH -o %x.o%j            # single STDOUT/STDERR output file jobname.o<job number>
-#SBATCH -p gpushort          # request gpushort partition
+#SBATCH -p sae          # request gpushort partition
+#SBATCH -A pilot_sae_gpu
 #SBATCH -n 8                 # 8 cores
 #SBATCH --cpus-per-gpu=8     # 8 cores per GPU
-#SBATCH -t 1:0:0             # 1 hour runtime (required to run on the short partition)
+#SBATCH -t 24:0:0             # 1 hour runtime (required to run on the short partition)
 #SBATCH --mem-per-cpu=10G    # 10 * 8 = 80G total system RAM
 #SBATCH --gres=gpu:1         # request 1 GPU of any type
 #SBATCH --constraint=ampere|hopper
 
 echo "Allocated GPU: $SLURM_JOB_GPUS"
 
-module load cuda
+module load python
 module load ffmpeg
 module load use.own uv
 
-uv sync --all-extras
+# uv sync --all-extras
 # uv pip install --force-reinstall --no-cache torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu126
 # uv pip install "transformers>=5.5.0"
 source .venv/bin/activate
@@ -71,20 +72,20 @@ export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvid
 export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH
 export EVAL_LLM_MODEL="Qwen/Qwen3-8B"
 
-MODEL_PATH="./models/MiniCPM-o-4_5"       
+MODEL_PATH="Qwen/Qwen3-Omni-30B-A3B-Thinking"       
 PT_PATH=""
-MODEL_TYPE="minicpmo"
-MODEL_NAME="minicpmo-4.5"
+MODEL_TYPE="qwen3_omni"
+MODEL_NAME="qwen3_omni"
 ANSWER_PATH="./results"
 GPUS_PER_NODE=1
 BATCH_SIZE=1
 MAX_SAMPLES="500"
-GENERATE_METHOD="chat"
-CONFIG_PATH="./configs/model_config/minicpmo45_batch_1poolstep.json"
+GENERATE_METHOD="generate"
+
 # ===================== 评测数据集选择（取消注释你需要的场景） =====================
 
 # --- 场景 1: ASR 语音识别 ---
-EVAL_DATASETS=" --eval_daily_omni"
+EVAL_DATASETS="--eval_daily_omni --eval_worldsense --eval_video_holmes --eval_jointavbench --eval_avut_benchmark_human --eval_futureomni --eval_videomme_short"
 
 OPT_ARGS=""
 OPT_ARGS+=" --model_path ${MODEL_PATH}"
@@ -104,13 +105,13 @@ fi
 
 # 多GPU模型分片（如需跨卡分布模型，取消注释下一行）
 #OPT_ARGS+=" --auto_device_map" 
-OPT_ARGS+=" --attn_implementation sdpa"
+# OPT_ARGS+=" --attn_implementation flash_attention_2"
 
 # 量化（如需降低显存占用，取消注释下一行）
 # OPT_ARGS+=" --quantization 4bit"
 
 OPT_ARGS+=" ${EVAL_DATASETS}"
-# OPT_ARGS+=" --config_path ${CONFIG_PATH}"
+OPT_ARGS+=" --batchsize ${BATCH_SIZE}"
 
 # Avoid using the default master port which might be occupied in shared environments
 # MASTER_PORT=${MASTER_PORT:-29500}

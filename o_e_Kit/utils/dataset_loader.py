@@ -518,6 +518,14 @@ def load_dataset(args, dataset_name, current_task=None):
             data_prefix_dir=getattr(args, f"{dataset_name}_data_prefix_dir"),
             dataset_name=dataset_name
         )
+    elif dataset_name == "StreamingBench":
+        task = current_task or "real"
+        config_name = f"streamingbench_{task}"
+        dataset = OmniEvalDataset(
+            annotation_path=getattr(args, f"{config_name}_annotation_path"),
+            data_prefix_dir=getattr(args, f"{config_name}_data_prefix_dir"),
+            dataset_name=config_name
+        )
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     
