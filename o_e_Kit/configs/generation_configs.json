@@ -519,5 +519,88 @@
             "max_fps": 1.0,
             "load_av": true
         }
+    },
+
+    "fdb_configs": {
+        "fdb_v1_pause_handling": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. Respond naturally to the user's speech. When the user pauses mid-sentence, wait briefly before continuing. If the user resumes speaking, stop your response and listen.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v1_backchannel": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. Listen to the user and provide natural backchanneling responses (like 'uh-huh', 'I see', 'okay') at appropriate times. Show you are engaged and listening.",
+            "max_tokens": 64,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v1_smooth_turn_taking": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. Take turns naturally in conversation. When the user finishes speaking, respond promptly. Avoid talking over the user.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v1_user_interruption": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. When responding to the user, if the user interrupts you, immediately stop speaking and listen. Only resume after the user has finished their interruption.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v15_user_interruption": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. When responding to the user, if the user interrupts you, immediately stop speaking and listen. Only resume after the user has finished their interruption.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v15_user_backchannel": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. Listen to the user and provide natural backchanneling responses (like 'uh-huh', 'I see', 'okay') at appropriate times. Show you are engaged and listening.",
+            "max_tokens": 64,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v15_talking_to_other": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. In this conversation, the user may speak simultaneously with you. Handle overlapping speech naturally — either continue speaking, yield the floor, or provide a backchannel as appropriate.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        },
+        "fdb_v15_background_speech": {
+            "user_prompt": "{audio}\nYou are a helpful voice assistant having a natural conversation. Respond appropriately to the user's speech.",
+            "system_prompt": "You are a helpful voice assistant. Respond naturally to the user. If there is background speech or a side conversation, ignore it and focus on the main interlocutor.",
+            "max_tokens": 256,
+            "num_beams": 1,
+            "sampling": true,
+            "temperature": 0.7,
+            "top_p": 0.8,
+            "top_k": 20
+        }
     }
 }

@@ -824,6 +824,110 @@ DATASET_REGISTRY = [
         },
         description="Omni-DuplexEval Proactive Reminder: evaluates proactive event reminders, post-event reminders, and correction-style proactive responses"
     ),
+
+    # =====================================================================
+    # Full-Duplex-Bench v1.0
+    # =====================================================================
+    DatasetConfig(
+        name="fdb_v1_pause_handling",
+        display_name="Full-Duplex-Bench v1.0 Pause Handling",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v1_pause_handling.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.0 Pause Handling: candor (216) + synthetic (137) samples evaluating pause sensitivity"
+    ),
+    DatasetConfig(
+        name="fdb_v1_backchannel",
+        display_name="Full-Duplex-Bench v1.0 Backchannel",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v1_backchannel.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.0 Backchannel: ICC dataset (55 samples) evaluating backchanneling behavior"
+    ),
+    DatasetConfig(
+        name="fdb_v1_smooth_turn_taking",
+        display_name="Full-Duplex-Bench v1.0 Smooth Turn-Taking",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v1_smooth_turn_taking.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.0 Smooth Turn-Taking: Candor dataset (119 samples) evaluating turn-taking latency"
+    ),
+    DatasetConfig(
+        name="fdb_v1_user_interruption",
+        display_name="Full-Duplex-Bench v1.0 User Interruption",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v1_user_interruption.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.0 User Interruption: synthetic dataset (200 samples) evaluating interruption handling"
+    ),
+
+    # =====================================================================
+    # Full-Duplex-Bench v1.5
+    # =====================================================================
+    DatasetConfig(
+        name="fdb_v15_user_interruption",
+        display_name="Full-Duplex-Bench v1.5 User Interruption",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v15_user_interruption.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.5 User Interruption: 200 samples with simulated user interruption overlap"
+    ),
+    DatasetConfig(
+        name="fdb_v15_user_backchannel",
+        display_name="Full-Duplex-Bench v1.5 User Backchannel",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v15_user_backchannel.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.5 User Backchannel: 99 samples with listener backchannel overlap"
+    ),
+    DatasetConfig(
+        name="fdb_v15_talking_to_other",
+        display_name="Full-Duplex-Bench v1.5 Talking to Other",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v15_talking_to_other.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.5 Talking to Other: 100 samples with side conversation overlap"
+    ),
+    DatasetConfig(
+        name="fdb_v15_background_speech",
+        display_name="Full-Duplex-Bench v1.5 Background Speech",
+        category="audio",
+        subcategory="duplex",
+        paths={
+            "data_prefix_dir": "./Full-Duplex-Bench/v1_v1.5/data/",
+            "annotation_path": "./Full-Duplex-Bench/v1_v1.5/data/jsonl/fdb_v15_background_speech.jsonl"
+        },
+        default_enabled=False,
+        description="Full-Duplex-Bench v1.5 Background Speech: 100 samples with ambient speech overlap"
+    ),
 ]
 
 # 额外的静态配置

@@ -80,6 +80,43 @@ def evaluate_duplex_datasets(args, device, time, async_evaluate: bool = False):
     return result
 
 
+# Full-Duplex-Bench v1/v1.5 dataset names (8 tasks)
+FDB_TASKS = [
+    "fdb_v1_pause_handling",
+    "fdb_v1_backchannel",
+    "fdb_v1_smooth_turn_taking",
+    "fdb_v1_user_interruption",
+    "fdb_v15_user_interruption",
+    "fdb_v15_user_backchannel",
+    "fdb_v15_talking_to_other",
+    "fdb_v15_background_speech",
+]
+
+
+def evaluate_fdb_datasets(args, model, time, async_evaluate: bool = False):
+    """
+    Evaluate Full-Duplex-Bench v1/v1.5 datasets.
+    Inference produces output.wav alongside input.wav via the model's TTS module.
+    Actual FDB metrics evaluation is done separately via the FDB evaluation scripts
+    (Full-Duplex-Bench/v1_v1.5/evaluation/evaluate.py).
+    
+    Uses evaluate=False to skip built-in evaluation (FDB has its own metrics pipeline).
+    """
+    result = {}
+    for task in FDB_TASKS:
+        eval_flag = f"eval_{task}"
+        if getattr(args, eval_flag, False):
+            dataset = load_dataset(args, task)
+            result[task] = infer_and_evaluate(
+                model, dataset, args.model_name, task, time,
+                answer_path=args.answer_path, batch_size=args.batchsize,
+                generate_method=args.generate_method,
+                evaluate=False,
+                async_evaluate=async_evaluate
+            )
+    return result
+
+
 def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
     """评估Omni数据集
     
@@ -367,6 +404,15 @@ def run_all_evaluations(args, model, device, time, async_evaluate: bool = True):
     result.update(duplex_results)
     if duplex_results:
         print(f"完成{len(duplex_results)}个Duplex数据集{'推理' if async_evaluate else '评估'}")
+    
+    # 评估Full-Duplex-Bench v1/v1.5数据集
+    print("\n" + "="*60)
+    print("【开始评估Full-Duplex-Bench数据集】")
+    print("="*60)
+    fdb_results = evaluate_fdb_datasets(args, model, time, async_evaluate=async_evaluate)
+    result.update(fdb_results)
+    if fdb_results:
+        print(f"完成{len(fdb_results)}个FDB数据集{'推理' if async_evaluate else '评估'}")
     
     # 评估Omni数据集
     print("\n" + "="*60)

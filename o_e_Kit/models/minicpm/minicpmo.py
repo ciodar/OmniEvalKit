@@ -574,8 +574,9 @@ class MiniCPM_o:
                 print(info)
             
             try:
-                # 构建 chat 参数（与 baseline minicpmo_ou.py 对齐）
-                response = self.model.chat(
+                # 对于 Full-Duplex-Bench 数据集，生成音频输出 (output.wav)
+                is_fdb = dataset_name.startswith("fdb_v1") or dataset_name.startswith("fdb_v15")
+                chat_kwargs = dict(
                     msgs=msgs,
                     do_sample=False,
                     max_new_tokens=max_tokens,
@@ -587,6 +588,18 @@ class MiniCPM_o:
                     merge_audio_from_same_content=merge_audio_from_same_content,
                 )
                 
+                output_audio_path = None
+                if is_fdb:
+                    audio_path = paths.get('audio_path', '')
+                    if audio_path:
+                        audio_dir = os.path.dirname(audio_path)
+                        output_audio_path = os.path.join(audio_dir, "output.wav")
+                        os.makedirs(audio_dir, exist_ok=True)
+                        chat_kwargs["generate_audio"] = True
+                        chat_kwargs["output_audio_path"] = output_audio_path
+                
+                response = self.model.chat(**chat_kwargs)
+                
                 if isinstance(response, list):
                     response = response[0]
                 if isinstance(response, tuple):
@@ -594,12 +607,16 @@ class MiniCPM_o:
                 if isinstance(response, str):
                     response = response.replace("<|tts_eos|>", "").strip()
                 
-                return {
+                result = {
                     "response": response,
                     "sequence": self._msgs_to_str(msgs),
                     "audio_speed": audio_speed,
                     "audio_trim_end": audio_trim_end,
                 }
+                if output_audio_path:
+                    result["output_audio_path"] = output_audio_path
+                
+                return result
             
             except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
                 # 检查是否是 OOM

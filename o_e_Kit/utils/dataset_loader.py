@@ -518,6 +518,13 @@ def load_dataset(args, dataset_name, current_task=None):
             data_prefix_dir=getattr(args, f"{dataset_name}_data_prefix_dir"),
             dataset_name=dataset_name
         )
+    elif dataset_name.startswith("fdb_v1") or dataset_name.startswith("fdb_v15"):
+        # Full-Duplex-Bench v1/v1.5: turn-taking and overlap handling tasks
+        dataset = OmniEvalDataset(
+            annotation_path=getattr(args, f"{dataset_name}_annotation_path"),
+            data_prefix_dir=getattr(args, f"{dataset_name}_data_prefix_dir"),
+            dataset_name=dataset_name
+        )
     else:
         raise ValueError(f"Unsupported dataset: {dataset_name}")
     
