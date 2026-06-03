@@ -208,14 +208,14 @@ class Gemma4OmniEvalModel:
 
         messages: List[Dict[str, Any]] = []
         user_content: List[Dict[str, Any]] = []
-        num_videos = 0
+        video_meta: List[Dict[str, Any]] = []
 
         video_path = paths.get("video_path")
         if video_path and os.path.exists(video_path):
             frames = load_video(video_path, max_frames=max_frames, max_fps=max_fps)
             if frames:
                 user_content.append({"type": "video", "video": frames})
-                num_videos += 1
+                video_meta.append({"fps": max_fps, "total_num_frames": len(frames)})
             if load_av:
                 waveform = self._extract_audio_from_video(video_path)
                 if waveform is not None:
@@ -249,7 +249,7 @@ class Gemma4OmniEvalModel:
                 frames = load_video(p, max_frames=max_frames, max_fps=max_fps)
                 if frames:
                     user_content.append({"type": "video", "video": frames})
-                    num_videos += 1
+                    video_meta.append({"fps": max_fps, "total_num_frames": len(frames)})
 
         if prompt:
             user_content.append({"type": "text", "text": prompt})
@@ -263,7 +263,7 @@ class Gemma4OmniEvalModel:
             )
 
         messages.append({"role": "user", "content": user_content})
-        return messages, gen_config, num_videos
+        return messages, gen_config, video_meta
 
     def generate(
         self,
@@ -279,16 +279,14 @@ class Gemma4OmniEvalModel:
             print(f"[Gemma4] Unexpected modality: {modality}, treat as omni.")
 
         for path, item in zip(paths, items):
-            messages, gen_config, num_videos = self.build_messages(dataset_name, path, item)
+            messages, gen_config, video_meta = self.build_messages(dataset_name, path, item)
 
             proc_kwargs: Dict[str, Any] = {
                 "do_sample_frames": False,
                 "sampling_rate": 16000,
             }
-            if num_videos > 0:
-                proc_kwargs["video_metadata"] = [
-                    {"fps": gen_config["max_fps"]}
-                ] * num_videos
+            if video_meta:
+                proc_kwargs["video_metadata"] = video_meta
 
             inputs = self.processor.apply_chat_template(
                 messages,
