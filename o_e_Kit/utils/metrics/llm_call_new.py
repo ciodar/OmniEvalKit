@@ -111,7 +111,7 @@ class ChatClient:
             print("   Example: export EVAL_LLM_MODEL=Qwen/Qwen2.5-1.5B-Instruct")
         
         self.base_url = base_url or os.environ.get(
-            'OPENAI_API_BASE', 
+            'OPENAI_API_BASE',
             'https://api.openai.com/v1/chat/completions'
         )
         self._current_key_index = 0  # 当前使用的 key 索引
