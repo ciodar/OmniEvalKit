@@ -123,6 +123,15 @@ class Gemma4OmniEvalModel:
             padding_side="left",
         )
 
+        # Diagnose and fix missing chat_template on the processor.
+        proc_ct = getattr(self.processor, "chat_template", None)
+        tok_ct = getattr(getattr(self.processor, "tokenizer", None), "chat_template", None)
+        print(f"  [Gemma4] processor.chat_template: {proc_ct is not None}")
+        print(f"  [Gemma4] tokenizer.chat_template:  {tok_ct is not None}")
+        if not proc_ct and tok_ct:
+            self.processor.chat_template = tok_ct
+            print("  [Gemma4] Copied chat_template from tokenizer to processor.")
+
         try:
             model_device = getattr(self.model, "device", None)
         except Exception:
@@ -159,6 +168,7 @@ class Gemma4OmniEvalModel:
             "top_p": float(config.get("top_p", 1.0)),
             "top_k": int(config.get("top_k", 50)),
             "repetition_penalty": float(config.get("repetition_penalty", 1.0)),
+            "enable_thinking": bool(config.get("enable_thinking", False)),
         }
 
     def _build_options_prompt(self, choices: List[str]) -> str:
@@ -262,6 +272,86 @@ class Gemma4OmniEvalModel:
         messages.append({"role": "user", "content": user_content})
         return messages, gen_config
 
+    @staticmethod
+    def _has_video(messages: List[Dict[str, Any]]) -> bool:
+        for msg in messages:
+            content = msg.get("content")
+            if not isinstance(content, list):
+                continue
+            for c in content:
+                if isinstance(c, dict) and c.get("type") == "video":
+                    return True
+        return False
+
+    def _apply_chat_template(
+        self, messages: List[Dict[str, Any]], enable_thinking: bool = False
+    ):
+        """
+        Tokenize messages + media.  Prefers processor.apply_chat_template when a
+        chat_template is available; falls back to tokenizer text formatting +
+        processor media processing when the processor lacks one.
+
+        Mirrors Google's official Gemma 4 (E2B/E4B/12B) usage: standard kwargs +
+        ``enable_thinking`` (the 12B-it model is a reasoning model).  Optional
+        kwargs (``enable_thinking``, ``do_sample_frames``) are stripped on
+        ``TypeError`` so older E2B/E4B processors that don't accept them keep
+        working.
+        """
+        if getattr(self.processor, "chat_template", None):
+            base_kwargs: Dict[str, Any] = {
+                "tokenize": True,
+                "return_dict": True,
+                "return_tensors": "pt",
+                "add_generation_prompt": True,
+            }
+            # Optional kwargs that newer transformers / the 12B processor accept,
+            # but older E2B/E4B processors may not. Passed flat (not nested in a
+            # legacy ``processor_kwargs`` dict, which breaks the newer version).
+            optional_kwargs: Dict[str, Any] = {"enable_thinking": enable_thinking}
+            if self._has_video(messages):
+                # Frames are already sampled by load_video(); don't re-sample.
+                optional_kwargs["do_sample_frames"] = False
+
+            try:
+                return self.processor.apply_chat_template(
+                    messages, **base_kwargs, **optional_kwargs
+                ).to(self.device)
+            except TypeError as e:
+                print(
+                    f"[Gemma4] apply_chat_template rejected optional kwargs "
+                    f"({optional_kwargs.keys()}): {e}. Retrying without them."
+                )
+                return self.processor.apply_chat_template(
+                    messages, **base_kwargs
+                ).to(self.device)
+
+        # Fallback: let the tokenizer handle text formatting and the processor
+        # handle media.  Requires the tokenizer to have a chat_template.
+        print("[Gemma4] WARNING: processor has no chat_template; falling back to "
+              "tokenizer.apply_chat_template + processor media processing.")
+        text = self.processor.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        images, audios = [], []
+        for msg in messages:
+            for c in msg.get("content", []) if isinstance(msg.get("content"), list) else []:
+                if c.get("type") == "image":
+                    images.append(c["image"])
+                elif c.get("type") == "audio":
+                    audios.append(c["audio"])
+                elif c.get("type") == "video":
+                    images.extend(c.get("video", []))  # treat frames as images
+
+        proc_kwargs: Dict[str, Any] = {"text": text, "return_tensors": "pt"}
+        if images:
+            proc_kwargs["images"] = images
+        if audios:
+            proc_kwargs["audios"] = audios
+
+        return self.processor(**proc_kwargs).to(self.device)
+
     def generate(
         self,
         dataset_name: str,
@@ -278,14 +368,10 @@ class Gemma4OmniEvalModel:
         for path, item in zip(paths, items):
             messages, gen_config = self.build_messages(dataset_name, path, item)
 
-            inputs = self.processor.apply_chat_template(
+            inputs = self._apply_chat_template(
                 messages,
-                tokenize=True,
-                return_dict=True,
-                return_tensors="pt",
-                add_generation_prompt=True,
-                processor_kwargs={"do_sample_frames": False},
-            ).to(self.device, dtype=self.model.dtype)
+                enable_thinking=bool(gen_config.get("enable_thinking", False)),
+            )
 
             try:
                 input_len = inputs["input_ids"].shape[-1]

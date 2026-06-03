@@ -109,7 +109,8 @@ class MiniCPM_o:
                 else:
                     setattr(config, key, value)
             
-            print(f"  pool-step: {config.audio_pool_step}, audio_chunk_length: {config.audio_chunk_length}")
+            init_tts = getattr(config, 'init_tts', False)
+            print(f"  pool-step: {config.audio_pool_step}, audio_chunk_length: {config.audio_chunk_length}, init_tts: {init_tts}, config_path: {config_path}")
 
         # Auto-detect attention implementation when not specified
         if attn_implementation is None:
@@ -141,7 +142,7 @@ class MiniCPM_o:
             "local_files_only": True
         }
         # 禁用 TTS 头：评估模式下不需要 TTS 输出，且与量化/多卡分片存在兼容性问题
-        if hasattr(config, 'init_tts'):
+        if not hasattr(config, 'init_tts'):
             config.init_tts = False
             # Also null out tts_config to prevent TTS module initialization entirely
             if hasattr(config, 'tts_config'):
@@ -598,6 +599,15 @@ class MiniCPM_o:
                         chat_kwargs["generate_audio"] = True
                         chat_kwargs["output_audio_path"] = output_audio_path
                 
+                # Initialize TTS audio tokenizer for FDB audio generation
+                if is_fdb and hasattr(self.model, 'tts') and not getattr(self.model.tts, 'audio_tokenizer', None):
+                    try:
+                        print("  Initializing TTS audio tokenizer...")
+                        self.model.init_tts(enable_float16=False)
+                        print("  TTS audio tokenizer initialized.")
+                    except Exception as tts_e:
+                        print(f"  ⚠ TTS init failed (audio output won't be generated): {tts_e}")
+
                 response = self.model.chat(**chat_kwargs)
                 
                 if isinstance(response, list):

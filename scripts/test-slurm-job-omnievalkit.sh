@@ -1,23 +1,61 @@
 #!/bin/bash
-#SBATCH -J test-omnievalkit      # job name
+#SBATCH -J omnievalkit-gemma4-12b      # job name
 #SBATCH -o %x.o%j            # single STDOUT/STDERR output file jobname.o<job number>
-#SBATCH -p gpushort          # request gpushort partition
+#SBATCH -p sae          # request gpushort partition
+#SBATCH -A pilot_sae_gpu
 #SBATCH -n 8                 # 8 cores
 #SBATCH --cpus-per-gpu=8     # 8 cores per GPU
-#SBATCH -t 1:0:0             # 1 hour runtime (required to run on the short partition)
+#SBATCH -t 24:0:0             # 1 hour runtime (required to run on the short partition)
 #SBATCH --mem-per-cpu=10G    # 10 * 8 = 80G total system RAM
 #SBATCH --gres=gpu:1         # request 1 GPU of any type
 #SBATCH --constraint=40G|80G
 
 echo "Allocated GPU: $SLURM_JOB_GPUS"
 
-module load python
+module load cuda
 module load ffmpeg
 module load use.own uv
 
-uv sync --all-extras
-uv pip install --force-reinstall --no-cache torch torchaudio --index-url https://download.pytorch.org/whl/cu126
+# uv sync --all-extras
+# uv pip install --force-reinstall --no-cache torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu126
 source .venv/bin/activate
+
+# ====================================================================
+# OLLAMA DIAGNOSTICS
+# ====================================================================
+echo ""
+echo "======================================================"
+echo "=== OLLAMA DIAGNOSTICS ==="
+echo "======================================================"
+
+# Kill any lingering ollama from previous jobs
+pkill -f "ollama serve" 2>/dev/null || true
+
+echo "1. Starting ollama serve in background..."
+ollama serve &
+OLLAMA_PID=$!
+echo "   Ollama PID: ${OLLAMA_PID}"
+
+# Wait for ollama to be ready
+echo "2. Waiting for ollama to be ready..."
+for i in $(seq 1 30); do
+    if curl -s http://localhost:11434/api/tags > /dev/null 2>&1; then
+        echo "   Ollama is ready after ${i}s"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "   ERROR: Ollama failed to start within 30s"
+        kill ${OLLAMA_PID} 2>/dev/null
+        exit 1
+    fi
+    sleep 1
+done
+
+echo "3. Ensuring model ${EVAL_MODEL:-qwen3:8b} is available..."
+ollama pull ${EVAL_MODEL:-qwen3:8b} 2>&1
+
+echo "======================================================"
+echo ""
 
 # ====================================================================
 # EXPANDED DIAGNOSTIC PRINTS: System Driver vs. Python Package
@@ -66,23 +104,32 @@ echo "======================================================"
 echo ""
 
 # Explicitly append the local nvidia dependencies to your library path
-export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH
+# Ollama endpoint configuration for LLM-as-Judge
+export EVAL_BASE_URL="http://localhost:11434/v1"
+export EVAL_MODEL="qwen3:8b"
+export EVAL_API_KEY="ollama"
 
-MODEL_PATH="/gpfs/scratch/qp252970/models/MiniCPM-o-4_5"         
+
+# Alternative: use a HuggingFace model as judge instead of Ollama
+# export EVAL_LLM_MODEL="Qwen/Qwen3-8B"
+# Force HF to look strictly at local files and skip the gating check
+export HF_HUB_OFFLINE="1"
+MODEL_PATH="google/gemma-4-12B-it"         
 PT_PATH=""
-MODEL_TYPE="minicpmo"
-MODEL_NAME="my_eval"
+MODEL_TYPE="gemma4_omni"
+MODEL_NAME="gemma4-12b-it"
 ANSWER_PATH="./results"
 GPUS_PER_NODE=1
 BATCH_SIZE=1
-MAX_SAMPLES="100"
-GENERATE_METHOD="chat"
+MAX_SAMPLES=""
+GENERATE_METHOD="generate"
 
 # ===================== 评测数据集选择（取消注释你需要的场景） =====================
 
 # --- 场景 1: ASR 语音识别 ---
-EVAL_DATASETS="--eval_omnibench"
+EVAL_DATASETS="--eval_daily_omni --eval_futureomni --eval_jointavbench --eval_omnibench --eval_worldsense"
 
 OPT_ARGS=""
 OPT_ARGS+=" --model_path ${MODEL_PATH}"
@@ -101,7 +148,8 @@ if [ -n "${MAX_SAMPLES}" ]; then
 fi
 
 # 多GPU模型分片（如需跨卡分布模型，取消注释下一行）
-# OPT_ARGS+=" --auto_device_map --attn_implementation flash_attention_2"
+OPT_ARGS+=" --attn_implementation sdpa"
+# OPT_ARGS+=" --auto_device_map"
 
 # 量化（如需降低显存占用，取消注释下一行）
 # OPT_ARGS+=" --quantization 4bit"
@@ -109,6 +157,10 @@ fi
 OPT_ARGS+=" ${EVAL_DATASETS}"
 
 MASTER_PORT=${MASTER_PORT:-29500}
+
+# Point Python's ChatClient at the Ollama endpoint
+export OPENAI_API_BASE="${EVAL_BASE_URL}"
+export OPENAI_API_KEY="${EVAL_API_KEY}"
 
 CMD="torchrun --nproc_per_node=${GPUS_PER_NODE} --master_port=${MASTER_PORT} eval_main.py ${OPT_ARGS}"
 
@@ -121,9 +173,14 @@ echo "GPUs:     ${GPUS_PER_NODE}"
 echo "Batch:    ${BATCH_SIZE}"
 echo "Output:   ${ANSWER_PATH}"
 echo "Datasets: ${EVAL_DATASETS}"
+echo "LLM-Judge: Ollama (${EVAL_MODEL} @ ${EVAL_BASE_URL})"
 echo "========================================"
 echo ""
 echo "CMD: ${CMD}"
 echo ""
 
 ${CMD}
+
+echo ""
+echo "Stopping ollama serve (PID ${OLLAMA_PID})..."
+kill ${OLLAMA_PID} 2>/dev/null || true
