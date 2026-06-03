@@ -12,13 +12,10 @@ torchrun --nproc_per_node=1 eval_main.py \
   --model_type minicpmo_duplex_demo \
   --model_path "$MODEL_PATH" \
   --model_name omniduplexeval \
-  --eval_omniduplexeval \
-  --omniduplexeval_splits $SPLITS \
-  --omniduplexeval_response_root ./results/omniduplexeval_responses \
-  --omniduplexeval_fps 1 \
+  --eval_omniduplexeval_rtd \
+  --eval_omniduplexeval_pr \
   --batchsize 1 \
   --answer_path ./results
 
-echo "Done. Responses saved to ./results/omniduplexeval_responses/"
-echo "Run upstream evaluation separately:"
-echo "  python scripts/evaluate_omniduplexeval.py --response_root ./results/omniduplexeval_responses"
+echo "Done. Inference finished."
+echo "Run evaluation separately via external OmniDuplexEval evaluator."

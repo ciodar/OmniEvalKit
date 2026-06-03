@@ -79,7 +79,9 @@ General-purpose generation method.
 
 ### Capabilities & Use Cases
 
-`Gemma4OmniEvalModel` is the evaluation wrapper for Google's **Gemma 4** models (E2B and E4B variants). It supports text, image, video, and audio input natively through HuggingFace Transformers. Video frames are extracted using the existing `load_video()` utility, and audio is loaded using `load_audio()`.
+`Gemma4OmniEvalModel` is the evaluation wrapper for Google's **Gemma 4** models (E2B, E4B, and the unified 12B variant). It supports text, image, video, and audio input natively through HuggingFace Transformers. Video frames are extracted using the existing `load_video()` utility, and audio is loaded using `load_audio()`.
+
+> **Note**: The unified **12B** model (`google/gemma-4-12B-it`, architecture `gemma4_unified`) requires a recent `transformers` version (`pip install -U transformers accelerate torchvision librosa`). It is a reasoning model — thinking mode is off by default and can be toggled per dataset via the `enable_thinking` key in `configs/generation_configs.json`.
 
 ### Core Methods
 
@@ -102,6 +104,18 @@ python eval_main.py \
     --model_type gemma4_omni \
     --model_path google/gemma-4-E2B-it \
     --model_name gemma-4-E2B-it \
+    --generate_method generate \
+    --attn_implementation sdpa \
+    --eval_daily_omni --eval_omnibench
+```
+
+For the unified 12B model, point `--model_path` / `--model_name` at it:
+
+```bash
+python eval_main.py \
+    --model_type gemma4_omni \
+    --model_path google/gemma-4-12B-it \
+    --model_name gemma-4-12B-it \
     --generate_method generate \
     --attn_implementation sdpa \
     --eval_daily_omni --eval_omnibench
