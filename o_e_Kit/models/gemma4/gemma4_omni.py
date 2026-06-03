@@ -185,7 +185,7 @@ class Gemma4OmniEvalModel:
 
     def build_messages(
         self, dataset_name: str, paths: Dict[str, Any], item: Dict[str, Any]
-    ) -> (List[Dict[str, Any]], Dict[str, Any]):
+    ) -> (List[Dict[str, Any]], Dict[str, Any], int):
         gen_config = self.get_generation_config(dataset_name)
         user_prompt_template = gen_config["user_prompt"]
         system_prompt = gen_config["system_prompt"]
@@ -208,12 +208,14 @@ class Gemma4OmniEvalModel:
 
         messages: List[Dict[str, Any]] = []
         user_content: List[Dict[str, Any]] = []
+        num_videos = 0
 
         video_path = paths.get("video_path")
         if video_path and os.path.exists(video_path):
             frames = load_video(video_path, max_frames=max_frames, max_fps=max_fps)
             if frames:
                 user_content.append({"type": "video", "video": frames})
+                num_videos += 1
             if load_av:
                 waveform = self._extract_audio_from_video(video_path)
                 if waveform is not None:
@@ -247,6 +249,7 @@ class Gemma4OmniEvalModel:
                 frames = load_video(p, max_frames=max_frames, max_fps=max_fps)
                 if frames:
                     user_content.append({"type": "video", "video": frames})
+                    num_videos += 1
 
         if prompt:
             user_content.append({"type": "text", "text": prompt})
@@ -260,7 +263,7 @@ class Gemma4OmniEvalModel:
             )
 
         messages.append({"role": "user", "content": user_content})
-        return messages, gen_config
+        return messages, gen_config, num_videos
 
     def generate(
         self,
@@ -276,7 +279,16 @@ class Gemma4OmniEvalModel:
             print(f"[Gemma4] Unexpected modality: {modality}, treat as omni.")
 
         for path, item in zip(paths, items):
-            messages, gen_config = self.build_messages(dataset_name, path, item)
+            messages, gen_config, num_videos = self.build_messages(dataset_name, path, item)
+
+            proc_kwargs: Dict[str, Any] = {
+                "do_sample_frames": False,
+                "sampling_rate": 16000,
+            }
+            if num_videos > 0:
+                proc_kwargs["video_metadata"] = [
+                    {"fps": gen_config["max_fps"]}
+                ] * num_videos
 
             inputs = self.processor.apply_chat_template(
                 messages,
@@ -284,21 +296,27 @@ class Gemma4OmniEvalModel:
                 return_dict=True,
                 return_tensors="pt",
                 add_generation_prompt=True,
-                processor_kwargs={"do_sample_frames": False},
+                processor_kwargs=proc_kwargs,
             ).to(self.device, dtype=self.model.dtype)
 
             try:
+                do_sample = bool(gen_config.get("do_sample", False))
+                generate_kwargs: Dict[str, Any] = {
+                    "max_new_tokens": int(gen_config.get("max_tokens", 256)),
+                    "pad_token_id": self.processor.tokenizer.pad_token_id,
+                    "num_beams": int(gen_config.get("num_beams", 1)),
+                    "do_sample": do_sample,
+                    "repetition_penalty": float(gen_config.get("repetition_penalty", 1.0)),
+                }
+                if do_sample:
+                    generate_kwargs["temperature"] = float(gen_config.get("temperature", 1.0))
+                    generate_kwargs["top_p"] = float(gen_config.get("top_p", 1.0))
+                    generate_kwargs["top_k"] = int(gen_config.get("top_k", 50))
+
                 input_len = inputs["input_ids"].shape[-1]
                 output_ids = self.model.generate(
                     **inputs,
-                    max_new_tokens=int(gen_config.get("max_tokens", 256)),
-                    pad_token_id=self.processor.tokenizer.pad_token_id,
-                    num_beams=int(gen_config.get("num_beams", 1)),
-                    do_sample=bool(gen_config.get("do_sample", False)),
-                    temperature=float(gen_config.get("temperature", 1.0)),
-                    top_p=float(gen_config.get("top_p", 1.0)),
-                    top_k=int(gen_config.get("top_k", 50)),
-                    repetition_penalty=float(gen_config.get("repetition_penalty", 1.0)),
+                    **generate_kwargs,
                 )
                 response = self.processor.decode(
                     output_ids[0][input_len:],
