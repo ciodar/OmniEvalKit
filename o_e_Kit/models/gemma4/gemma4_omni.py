@@ -401,6 +401,11 @@ class Gemma4OmniEvalModel:
                     if isinstance(response, dict):
                         response = response.get('content') or response.get('text') or ''
                     response = str(response).strip()
+                    # Defensive strip: enable_thinking=False may suppress the opening
+                    # <|channel> token in the prompt, but the model can still emit
+                    # "thought\n<channel|>" as plain text, causing parse_response to
+                    # miss the thinking boundary and capture everything as content.
+                    response = self._strip_thinking(response)
                 except (AttributeError, Exception):
                     # parse_response unavailable in this transformers version;
                     # fall back to manual stripping.

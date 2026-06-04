@@ -56,10 +56,9 @@ dependencies = [
     "accelerate",
     "bitsandbytes",
     "protobuf",
-    "torch>=2.3.0,<=2.8.0",
-    "torchvision==0.22.0",
-    "torchaudio<=2.8.0",
-    "minicpmo-utils[tts,streaming]>=1.0.5",
+    "torch",
+    "torchvision",
+    "torchaudio"
 ]
 
 [project.optional-dependencies]
