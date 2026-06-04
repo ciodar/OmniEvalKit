@@ -8,12 +8,19 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 import re
+import os
 from collections import defaultdict
 from o_e_Kit.utils.metrics.llm_call_new import ChatClient, APIModelName, create_llm_client
 from enum import Enum
 from o_e_Kit.utils.logger.simple_progress import smart_progress
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import threading
+
+
+def _is_local_llm_api() -> bool:
+    """Return True when the LLM judge endpoint is a local server (e.g. ollama, vllm)."""
+    base_url = os.environ.get('OPENAI_API_BASE', '')
+    return 'localhost' in base_url or '127.0.0.1' in base_url
 
 class VerboseLevel(Enum):
     """详细级别枚举"""
@@ -32,23 +39,35 @@ class BaseEvaluator(ABC):
     """
     
     def __init__(self, use_llm_fallback: bool = True, max_workers: int = 16,
+                 max_concurrent_llm_calls: int = None,
                  group_by_fields: List[str] = None):
         """
         初始化评估器
-        
+
         Args:
             use_llm_fallback: 当规则评估失败时，是否使用LLM作为后备
             max_workers: 并行评估的最大线程数
+            max_concurrent_llm_calls: 同时向LLM API发起的最大并发请求数。
+                默认为 1（本地API如ollama）或 max_workers（远程API）。
+                对ollama等单请求服务设为1可避免请求排队和资源争用。
             group_by_fields: 分组统计字段列表，如 ['task', 'subset_name']
         """
         self.use_llm_fallback = use_llm_fallback
         self.llm_client = None
-        self.max_workers = max_workers
         self.group_by_fields = group_by_fields or []
-        
+
+        # For local single-threaded servers (ollama), cap workers to avoid
+        # idle threads piling up HTTP connections that are queued anyway.
+        if max_concurrent_llm_calls is None:
+            max_concurrent_llm_calls = 1 if _is_local_llm_api() else max_workers
+        if _is_local_llm_api():
+            max_workers = min(max_workers, max_concurrent_llm_calls)
+        self.max_workers = max_workers
+        self._llm_semaphore = threading.Semaphore(max_concurrent_llm_calls)
+
         if use_llm_fallback:
             self.llm_client = create_llm_client(use_llm_fallback=True)
-        
+
         # 用于线程安全的锁
         self._lock = threading.Lock()
         
@@ -117,7 +136,8 @@ class BaseEvaluator(ABC):
         else:
             # 如果规则评估失败且启用了LLM后备
             if self.use_llm_fallback and self.llm_client:
-                result = self.llm_eval(prediction)
+                with self._llm_semaphore:
+                    result = self.llm_eval(prediction)
                 if result is not None and result.get('extract_fail', 0) == 0:
                     eval_method = 'llm'
                     result['eval_method'] = 'llm'

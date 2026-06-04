@@ -130,8 +130,6 @@ echo ""
 # Explicitly append the local nvidia dependencies to your library path
 # export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/cudnn/lib:$LD_LIBRARY_PATH
 # export LD_LIBRARY_PATH=$HOME/OmniEvalKit/.venv/lib/python3.11/site-packages/nvidia/nvjitlink/lib:$LD_LIBRARY_PATH
-# Ollama endpoint configuration for LLM-as-Judge
-
 
 
 # Force HF to look strictly at local files and skip the gating check

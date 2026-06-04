@@ -2,14 +2,18 @@ import os
 import torch
 import json
 import itertools
+import logging
 from typing import Dict, List, Any, Optional, Union, Tuple
 from o_e_Kit.utils.logger.simple_progress import smart_progress
 from o_e_Kit.utils.eval import evaluate_dataset
 from o_e_Kit.utils.dataloader import create_dataloader
+from o_e_Kit.utils.metrics.evaluator_base import _is_local_llm_api
 import time as time_module
 import torch.distributed
 from concurrent.futures import ThreadPoolExecutor, Future
 import threading
+
+logger = logging.getLogger(__name__)
 
 # ============== 异步评估模块 ==============
 # 全局评估线程池（单线程，保证评估顺序执行）
@@ -369,6 +373,13 @@ def infer_and_evaluate(
 
     if evaluate:
         if async_evaluate:
+            if _is_local_llm_api():
+                logger.warning(
+                    "async_evaluate=True with a local LLM judge (e.g. ollama) causes GPU "
+                    "contention: the main model and the judge compete for the same GPU while "
+                    "inference is still running. Consider async_evaluate=False to run them "
+                    "sequentially and avoid mutual slowdown."
+                )
             # 异步评估：提交到线程池后立即返回，不阻塞主线程
             submit_async_evaluate(answer_file_path=answer_file_path, dataset_name=dataset_name)
             return None  # 返回 None，实际结果通过 wait_all_evaluations() 获取
