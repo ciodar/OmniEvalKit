@@ -92,6 +92,14 @@ class Gemma4OmniEvalModel:
         if auto_device_map:
             model_kwargs["device_map"] = "auto"
 
+        if attn_implementation is None:
+            try:
+                from transformers.utils import is_flash_attn_2_available
+                attn_implementation = "flash_attention_2" if is_flash_attn_2_available() else "sdpa"
+            except ImportError:
+                attn_implementation = "sdpa"
+            print(f"  attn_implementation: auto -> {attn_implementation}")
+
         if attn_implementation:
             model_kwargs["attn_implementation"] = attn_implementation
 
