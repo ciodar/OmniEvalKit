@@ -1,5 +1,6 @@
 import os
 import random
+import re
 import tempfile
 from typing import Any, Dict, List, Optional
 
@@ -9,7 +10,7 @@ from PIL import Image
 from transformers import AutoModelForMultimodalLM, AutoProcessor, BitsAndBytesConfig
 
 from o_e_Kit.utils.config_utils import load_config
-from o_e_Kit.utils.utils import load_audio, load_video
+from o_e_Kit.utils.utils import load_audio, load_video, load_video_and_audio_interleaved
 from o_e_Kit.utils.video_utils import extract_audio_from_video
 
 
@@ -109,7 +110,7 @@ class Gemma4OmniEvalModel:
 
         self.model = AutoModelForMultimodalLM.from_pretrained(
             model_path,
-            torch_dtype=torch.bfloat16,
+            torch_dtype="auto",
             **model_kwargs,
         )
 
@@ -153,6 +154,7 @@ class Gemma4OmniEvalModel:
             "max_frames": int(config.get("max_frames", 64)),
             "max_fps": float(config.get("max_fps", 1.0)),
             "load_av": bool(config.get("load_av", False)),
+            "interleave_fps": float(config.get("interleave_fps", 0.0)),
             "num_beams": int(config.get("num_beams", 1)),
             "do_sample": bool(config.get("sampling", False)),
             "temperature": float(config.get("temperature", 1.0)),
@@ -168,6 +170,29 @@ class Gemma4OmniEvalModel:
         return "".join(
             f"{k}. {c}\n" for k, c in zip(keys[: len(choices)], choices)
         )
+
+    def _strip_thinking(self, response: str) -> str:
+        # Gemma 4's actual thinking format uses channel tokens that decode as:
+        #   <|channel>thought\n[reasoning]<channel|>[final answer]
+        # With skip_special_tokens=False, the channel delimiters appear literally.
+        # Split on the closing channel token to extract only the final answer.
+        if "<channel|>" in response:
+            after = response.rsplit("<channel|>", 1)[-1].strip()
+            # Remove any remaining special-token markup
+            after = re.sub(r"<\|[^|>]+\|>|<[^>]+\|>|\|[^>]+>", "", after).strip()
+            if after:
+                print("[Gemma4] Stripped thinking channel block from response.")
+                return after
+        # Fallback: repeated "thought\n" lines — <|channel>thought\n decoded without
+        # the surrounding delimiters when skip_special_tokens=True strips the channel tags
+        # but leaves the literal "thought" content token behind.
+        lines = response.split("\n")
+        non_thought = [l for l in lines if l.strip() != "thought"]
+        if len(non_thought) < len([l for l in lines if l.strip()]):
+            n_removed = len([l for l in lines if l.strip() == "thought"])
+            print(f"[Gemma4] Stripped {n_removed} 'thought' token line(s) from response.")
+            return "\n".join(non_thought).strip()
+        return response.strip()
 
     def _extract_audio_from_video(self, video_path: str) -> Optional[np.ndarray]:
         try:
@@ -192,6 +217,7 @@ class Gemma4OmniEvalModel:
         max_frames = gen_config["max_frames"]
         max_fps = gen_config["max_fps"]
         load_av = gen_config["load_av"]
+        interleave_fps = gen_config["interleave_fps"]
 
         question = item.get("question", item.get("prompt", ""))
         choices = item.get("choices", [])
@@ -203,26 +229,76 @@ class Gemma4OmniEvalModel:
             .replace("{options}", options_prompt.rstrip())
             .replace("{sqa_context}", sqa_context)
             .replace("{media}", "")
+            .replace("{audio}", "")
+            .replace("{image}", "")
+            .replace("{video}", "")
             .strip()
         )
 
         messages: List[Dict[str, Any]] = []
         user_content: List[Dict[str, Any]] = []
 
+        # --- Visual content first (images / video before text, per Gemma 4 docs) ---
+
         video_path = paths.get("video_path")
         if video_path and os.path.exists(video_path):
-            frames = load_video(video_path, max_frames=max_frames, max_fps=max_fps)
-            if frames:
-                user_content.append({"type": "video", "video": frames})
-            if load_av:
-                waveform = self._extract_audio_from_video(video_path)
-                if waveform is not None:
-                    user_content.append({"type": "audio", "audio": waveform})
+            if load_av and interleave_fps > 0:
+                # Temporally-aligned interleaved [frame, audio_seg, frame, audio_seg, ...]
+                # mirrors MiniCPM-O's omni_mode for a fair comparison on streamingbench_omni_fix.
+                media = load_video_and_audio_interleaved(
+                    video_path,
+                    max_frames=max_frames,
+                    max_fps=max_fps,
+                    audio_sr=16000,
+                )
+                for elem in media:
+                    if isinstance(elem, Image.Image):
+                        user_content.append({"type": "image", "image": elem})
+                    elif isinstance(elem, np.ndarray):
+                        user_content.append({"type": "audio", "audio": elem})
+            else:
+                frames = load_video(video_path, max_frames=max_frames, max_fps=max_fps)
+                if frames:
+                    user_content.append({"type": "video", "video": frames})
+                if load_av:
+                    waveform = self._extract_audio_from_video(video_path)
+                    if waveform is not None:
+                        user_content.append({"type": "audio", "audio": waveform})
 
         image_path = paths.get("image_path")
         if image_path and os.path.exists(image_path):
             image = Image.open(image_path).convert("RGB")
             user_content.append({"type": "image", "image": image})
+
+        image_paths_dict = paths.get("image_paths_dict") or {}
+        for _, p in image_paths_dict.items():
+            if p and os.path.exists(p):
+                image = Image.open(p).convert("RGB")
+                user_content.append({"type": "image", "image": image})
+
+        video_paths_dict = paths.get("video_paths_dict") or {}
+        for _, p in video_paths_dict.items():
+            if p and os.path.exists(p):
+                if load_av and interleave_fps > 0:
+                    media = load_video_and_audio_interleaved(
+                        p, max_frames=max_frames, max_fps=max_fps, audio_sr=16000
+                    )
+                    for elem in media:
+                        if isinstance(elem, Image.Image):
+                            user_content.append({"type": "image", "image": elem})
+                        elif isinstance(elem, np.ndarray):
+                            user_content.append({"type": "audio", "audio": elem})
+                else:
+                    frames = load_video(p, max_frames=max_frames, max_fps=max_fps)
+                    if frames:
+                        user_content.append({"type": "video", "video": frames})
+
+        # --- Text between visual and audio (per Gemma 4 docs: text before audio) ---
+
+        if prompt:
+            user_content.append({"type": "text", "text": prompt})
+
+        # --- Audio last (Gemma 4 docs: audio after text) ---
 
         audio_path = paths.get("audio_path")
         if audio_path and os.path.exists(audio_path):
@@ -234,22 +310,6 @@ class Gemma4OmniEvalModel:
             if p and os.path.exists(p):
                 waveform = load_audio(p, sr=16000)
                 user_content.append({"type": "audio", "audio": waveform})
-
-        image_paths_dict = paths.get("image_paths_dict") or {}
-        for _, p in image_paths_dict.items():
-            if p and os.path.exists(p):
-                image = Image.open(p).convert("RGB")
-                user_content.append({"type": "image", "image": image})
-
-        video_paths_dict = paths.get("video_paths_dict") or {}
-        for _, p in video_paths_dict.items():
-            if p and os.path.exists(p):
-                frames = load_video(p, max_frames=max_frames, max_fps=max_fps)
-                if frames:
-                    user_content.append({"type": "video", "video": frames})
-
-        if prompt:
-            user_content.append({"type": "text", "text": prompt})
 
         if system_prompt:
             messages.append(
@@ -283,14 +343,23 @@ class Gemma4OmniEvalModel:
                 "sampling_rate": 16000,
             }
 
-            inputs = self.processor.apply_chat_template(
-                messages,
+            template_kwargs: Dict[str, Any] = dict(
                 tokenize=True,
                 return_dict=True,
                 return_tensors="pt",
                 add_generation_prompt=True,
                 processor_kwargs=proc_kwargs,
-            ).to(self.device, dtype=self.model.dtype)
+            )
+            try:
+                # Suppress Gemma 4's built-in chain-of-thought so the token budget
+                # is spent entirely on the answer, not on thinking tokens.
+                inputs = self.processor.apply_chat_template(
+                    messages, **template_kwargs, enable_thinking=False
+                )
+            except TypeError:
+                inputs = self.processor.apply_chat_template(messages, **template_kwargs)
+
+            inputs = inputs.to(self.device, dtype=self.model.dtype)
 
             try:
                 do_sample = bool(gen_config.get("do_sample", False))
@@ -311,11 +380,28 @@ class Gemma4OmniEvalModel:
                     **inputs,
                     **generate_kwargs,
                 )
-                response = self.processor.decode(
+                # Official Gemma 4 decoding: keep special tokens so that
+                # parse_response() can locate the channel delimiters and extract
+                # only the final answer, discarding any thinking content.
+                raw = self.processor.decode(
                     output_ids[0][input_len:],
-                    skip_special_tokens=True,
+                    skip_special_tokens=False,
                     clean_up_tokenization_spaces=False,
                 )
+                try:
+                    response = self.processor.parse_response(raw)
+                except (AttributeError, Exception):
+                    # parse_response unavailable in this transformers version;
+                    # fall back to manual stripping.
+                    response = self._strip_thinking(raw)
+                    if not response:
+                        # Last resort: decode cleanly without special tokens
+                        response = self.processor.decode(
+                            output_ids[0][input_len:],
+                            skip_special_tokens=True,
+                            clean_up_tokenization_spaces=False,
+                        )
+                        response = self._strip_thinking(response)
             except Exception as e:
                 print(f"[Gemma4] Generation failed: {e}")
                 response = ""
