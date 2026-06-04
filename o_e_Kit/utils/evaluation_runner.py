@@ -1,11 +1,11 @@
 """
-评估运行模块
-负责运行所有数据集的评估
-每个数据集都显式处理，便于理解和维护
+Evaluation runner module
+Runs evaluations for all datasets
+Each dataset is handled explicitly for clarity and maintainability
 
-支持异步评估模式：通过 async_evaluate 参数控制
-- async_evaluate=False: 同步评估（默认，保持向后兼容）
-- async_evaluate=True: 异步评估，推理完成后立即返回，评估在后台线程执行
+Supports async evaluation mode controlled by the async_evaluate parameter:
+- async_evaluate=False: Sync evaluation (default, backward compatible)
+- async_evaluate=True: Async evaluation, returns immediately after inference, evaluation runs in background thread
 """
 
 import torch
@@ -18,46 +18,46 @@ from o_e_Kit.utils.evaluation_runner_audio import evaluate_all_audio_datasets
 
 
 def evaluate_video_datasets(args, model, device, time, async_evaluate: bool = False):
-    """评估视频数据集
+    """Evaluate video datasets
     
     Args:
-        async_evaluate: 是否使用异步评估模式
+        async_evaluate: Whether to use async evaluation mode
     """
     result = {}
     
-    # StreamingBench评估
+    # StreamingBench evaluation
     if args.eval_streamingbench:
         for task in args.streamingbench_tasks:
             dataset = load_dataset(args, "StreamingBench", task)
             result_key = f'StreamingBench-{task.upper()}'
             
-            # 根据任务类型选择推理方法
+            # Select inference method based on task type
             if task == "proactive":
                 generate_method = "proactive"
-                print(f"  -> 使用proactive推理模式（循环时间判断 + 主动输出）")
+                print(f"  -> Using proactive inference mode (cyclic timing judgment + proactive output)")
             else:
                 generate_method = "chat"
-                print(f"  -> 使用chat推理模式（标准问答评估）")
+                print(f"  -> Using chat inference mode (standard QA evaluation)")
             
             result[result_key] = infer_and_evaluate(
                 model, dataset, args.model_name, result_key, time, 
                 answer_path=args.answer_path, batch_size=args.batchsize, generate_method=generate_method,
                 async_evaluate=async_evaluate
             )
-            print(f"StreamingBench-{task.upper()}{'推理' if async_evaluate else '评估'}完成")
+            print(f"StreamingBench-{task.upper()} {'inference' if async_evaluate else 'evaluation'} completed")
     
     return result
 
 
 def evaluate_duplex_datasets(args, device, time, async_evaluate: bool = False):
-    """评估Duplex数据集
+    """Evaluate Duplex datasets
     
     Args:
-        async_evaluate: 是否使用异步评估模式
+        async_evaluate: Whether to use async evaluation mode
     """
     result = {}
     
-    # LiveSports-3K CC 双工评估 (统一格式)
+    # LiveSports-3K CC duplex evaluation (unified format)
     if getattr(args, 'eval_livesports3k_cc', False):
         dataset = load_dataset(args, "livesports3k_cc")
         duplex_model = load_model(args, device, duplex_type="video")
@@ -118,10 +118,10 @@ def evaluate_fdb_datasets(args, model, time, async_evaluate: bool = False):
 
 
 def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
-    """评估Omni数据集
+    """Evaluate Omni datasets
     
     Args:
-        async_evaluate: 是否使用异步评估模式
+        async_evaluate: Whether to use async evaluation mode
     """
     result = {}
     
@@ -133,7 +133,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Daily-Omni 评估
+    # Daily-Omni evaluation
     if getattr(args, 'eval_daily_omni', False):
         dataset = load_dataset(args, "daily_omni")
         result['daily_omni'] = infer_and_evaluate(
@@ -143,7 +143,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # OmniBench 评估
+    # OmniBench evaluation
     if getattr(args, 'eval_omnibench', False):
         dataset = load_dataset(args, "omnibench")
         result['omnibench'] = infer_and_evaluate(
@@ -153,7 +153,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # UNO-Bench 评估
+    # UNO-Bench evaluation
     if getattr(args, 'eval_unobench', False):
         dataset = load_dataset(args, "unobench")
         result['unobench'] = infer_and_evaluate(
@@ -163,7 +163,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
 
-    # UNO-Bench MCQ 评估
+    # UNO-Bench MCQ evaluation
     if getattr(args, 'eval_unobench_mc', False):
         dataset = load_dataset(args, "unobench_mc")
         result['unobench_mc'] = infer_and_evaluate(
@@ -173,7 +173,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # WorldSense 评估
+    # WorldSense evaluation
     if getattr(args, 'eval_worldsense', False):
         dataset = load_dataset(args, "worldsense")
         result['worldsense'] = infer_and_evaluate(
@@ -183,7 +183,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # AV-Odyssey 评估
+    # AV-Odyssey evaluation
     if getattr(args, 'eval_av_odyssey', False):
         dataset = load_dataset(args, "av_odyssey")
         result['av_odyssey'] = infer_and_evaluate(
@@ -193,7 +193,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Video-MME 评估
+    # Video-MME evaluation
     if getattr(args, 'eval_videomme', False):
         dataset = load_dataset(args, "videomme")
         result['videomme'] = infer_and_evaluate(
@@ -203,7 +203,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Video-MME Short 评估（仅 duration=short 的子集）
+    # Video-MME Short evaluation (only duration=short subset)
     if getattr(args, 'eval_videomme_short', False):
         dataset = load_dataset(args, "videomme_short")
         result['videomme_short'] = infer_and_evaluate(
@@ -213,7 +213,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # JointAVBench（音视频联合理解 MCQ）评估
+    # JointAVBench (audio-visual joint understanding MCQ) evaluation
     if getattr(args, 'eval_jointavbench', False):
         dataset = load_dataset(args, "jointavbench")
         result['jointavbench'] = infer_and_evaluate(
@@ -223,7 +223,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # OVO-Bench（统一 Omni JSONL，离线 MCQ/QA）评估
+    # OVO-Bench (unified Omni JSONL, offline MCQ/QA) evaluation
     if getattr(args, 'eval_ovobench', False):
         dataset = load_dataset(args, "ovobench")
         result['ovobench'] = infer_and_evaluate(
@@ -233,7 +233,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # StreamingBench-Real（统一 Omni JSONL，离线 MCQ/QA）评估
+    # StreamingBench-Real (unified Omni JSONL, offline MCQ/QA) evaluation
     if getattr(args, 'eval_streamingbench_real', False):
         dataset = load_dataset(args, "streamingbench_real")
         result['streamingbench_real'] = infer_and_evaluate(
@@ -243,7 +243,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # StreamingBench-Omni（统一 Omni JSONL，离线 MCQ/QA）评估
+    # StreamingBench-Omni (unified Omni JSONL, offline MCQ/QA) evaluation
     if getattr(args, 'eval_streamingbench_omni', False):
         dataset = load_dataset(args, "streamingbench_omni")
         result['streamingbench_omni'] = infer_and_evaluate(
@@ -253,7 +253,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # StreamingBench-Omni-Fix（筛选后的 Omni JSONL，仅 4 种 task_type）评估
+    # StreamingBench-Omni-Fix (filtered Omni JSONL, only 4 task_types) evaluation
     if getattr(args, 'eval_streamingbench_omni_fix', False):
         dataset = load_dataset(args, "streamingbench_omni_fix")
         result['streamingbench_omni_fix'] = infer_and_evaluate(
@@ -263,7 +263,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # StreamingBench-SQA（统一 Omni JSONL，离线 MCQ/QA）评估
+    # StreamingBench-SQA (unified Omni JSONL, offline MCQ/QA) evaluation
     if getattr(args, 'eval_streamingbench_sqa', False):
         dataset = load_dataset(args, "streamingbench_sqa")
         result['streamingbench_sqa'] = infer_and_evaluate(
@@ -273,7 +273,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Video-Holmes 评估
+    # Video-Holmes evaluation
     if getattr(args, 'eval_video_holmes', False):
         dataset = load_dataset(args, "video_holmes")
         result['video_holmes'] = infer_and_evaluate(
@@ -283,7 +283,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # AVUT-Benchmark Human 评估
+    # AVUT-Benchmark Human evaluation
     if getattr(args, 'eval_avut_benchmark_human', False):
         dataset = load_dataset(args, "avut_benchmark_human")
         result['avut_benchmark_human'] = infer_and_evaluate(
@@ -293,7 +293,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # AVUT-Benchmark Gemini 评估
+    # AVUT-Benchmark Gemini evaluation
     if getattr(args, 'eval_avut_benchmark_gemini', False):
         dataset = load_dataset(args, "avut_benchmark_gemini")
         result['avut_benchmark_gemini'] = infer_and_evaluate(
@@ -303,7 +303,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # FutureOmni 评估（未来预测基准）
+    # FutureOmni evaluation (future prediction benchmark)
     if getattr(args, 'eval_futureomni', False):
         dataset = load_dataset(args, "futureomni")
         result['futureomni'] = infer_and_evaluate(
@@ -313,7 +313,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # AVMeme-Exam Full 评估（音视频 Meme 理解）
+    # AVMeme-Exam Full evaluation (audio-visual meme understanding)
     if getattr(args, 'eval_avmeme_full', False):
         dataset = load_dataset(args, "avmeme_full")
         result['avmeme_full'] = infer_and_evaluate(
@@ -323,7 +323,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # AVMeme-Exam Main 评估（去除 text_cheat 后的数据集）
+    # AVMeme-Exam Main evaluation (dataset with text_cheat removed)
     if getattr(args, 'eval_avmeme_main', False):
         dataset = load_dataset(args, "avmeme_main")
         result['avmeme_main'] = infer_and_evaluate(
@@ -333,7 +333,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Omni-DuplexEval Real-time Description 评估（推理 + 保存原始输出，评估由外部 OmniDuplexEval 脚本处理）
+    # Omni-DuplexEval Real-time Description evaluation (inference + save raw output, evaluated by external OmniDuplexEval script)
     if getattr(args, 'eval_omniduplexeval_rtd', False):
         dataset = load_dataset(args, "omniduplexeval_rtd")
         result['omniduplexeval_rtd'] = infer_and_evaluate(
@@ -344,7 +344,7 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
             async_evaluate=async_evaluate
         )
     
-    # Omni-DuplexEval Proactive Reminder 评估（推理 + 保存原始输出，评估由外部 OmniDuplexEval 脚本处理）
+    # Omni-DuplexEval Proactive Reminder evaluation (inference + save raw output, evaluated by external OmniDuplexEval script)
     if getattr(args, 'eval_omniduplexeval_pr', False):
         dataset = load_dataset(args, "omniduplexeval_pr")
         result['omniduplexeval_pr'] = infer_and_evaluate(
@@ -359,97 +359,97 @@ def evaluate_omni_datasets(args, model, time, async_evaluate: bool = False):
 
 
 def run_all_evaluations(args, model, device, time, async_evaluate: bool = True):
-    """运行所有评估任务
+    """Run all evaluation tasks
     
     Args:
-        args: 命令行参数
-        model: 模型实例
-        device: 设备
-        time: 时间戳
-        async_evaluate: 是否使用异步评估模式（默认 True）
-            - True: 推理完成后立即返回，评估在后台线程执行，所有推理完成后统一等待评估结果
-            - False: 同步模式，每个数据集推理后立即评估（可能导致多卡超时）
+        args: Command line arguments
+        model: Model instance
+        device: Device
+        time: Timestamp
+        async_evaluate: Whether to use async evaluation mode (default True)
+            - True: Returns immediately after inference, evaluation runs in background thread, all evaluations awaited after all inference completes
+            - False: Sync mode, evaluates immediately after each dataset inference (may cause multi-GPU timeout)
     
     Returns:
-        评估结果字典
+        Dictionary of evaluation results
     """
     result = {}
     
     if async_evaluate:
-        print("\n📌 使用异步评估模式：推理和评估并行执行，避免多卡超时")
+        print("\nUsing async evaluation mode: inference and evaluation run in parallel to avoid multi-GPU timeout")
     
-    # 评估音频数据集（ASR和QA）
+    # Evaluate audio datasets (ASR and QA)
     print("\n" + "="*60)
-    print("【开始评估音频数据集】")
+    print("[Starting audio dataset evaluation]")
     print("="*60)
     audio_results = evaluate_all_audio_datasets(args, model, time, async_evaluate=async_evaluate)
     result.update(audio_results)
     if audio_results:
-        print(f"完成{len(audio_results)}个音频数据集{'推理' if async_evaluate else '评估'}")
+        print(f"Completed {len(audio_results)} audio dataset(s) {'inference' if async_evaluate else 'evaluation'}")
     
-    # 评估视频数据集
+    # Evaluate video datasets
     print("\n" + "="*60)
-    print("【开始评估视频数据集】")
+    print("[Starting video dataset evaluation]")
     print("="*60)
     video_results = evaluate_video_datasets(args, model, device, time, async_evaluate=async_evaluate)
     result.update(video_results)
     if video_results:
-        print(f"完成{len(video_results)}个视频数据集{'推理' if async_evaluate else '评估'}")
+        print(f"Completed {len(video_results)} video dataset(s) {'inference' if async_evaluate else 'evaluation'}")
     
-    # 评估Duplex数据集
+    # Evaluate Duplex datasets
     print("\n" + "="*60)
-    print("【开始评估Duplex数据集】")
+    print("[Starting Duplex dataset evaluation]")
     print("="*60)
     duplex_results = evaluate_duplex_datasets(args, device, time, async_evaluate=async_evaluate)
     result.update(duplex_results)
     if duplex_results:
-        print(f"完成{len(duplex_results)}个Duplex数据集{'推理' if async_evaluate else '评估'}")
+        print(f"Completed {len(duplex_results)} Duplex dataset(s) {'inference' if async_evaluate else 'evaluation'}")
     
-    # 评估Full-Duplex-Bench v1/v1.5数据集
+    # Evaluate Full-Duplex-Bench v1/v1.5 datasets
     print("\n" + "="*60)
-    print("【开始评估Full-Duplex-Bench数据集】")
+    print("[Starting Full-Duplex-Bench dataset evaluation]")
     print("="*60)
     fdb_results = evaluate_fdb_datasets(args, model, time, async_evaluate=async_evaluate)
     result.update(fdb_results)
     if fdb_results:
-        print(f"完成{len(fdb_results)}个FDB数据集{'推理' if async_evaluate else '评估'}")
+        print(f"Completed {len(fdb_results)} FDB dataset(s) {'inference' if async_evaluate else 'evaluation'}")
     
-    # 评估Omni数据集
+    # Evaluate Omni datasets
     print("\n" + "="*60)
-    print("【开始评估Omni数据集】")
+    print("[Starting Omni dataset evaluation]")
     print("="*60)
     omni_results = evaluate_omni_datasets(args, model, time, async_evaluate=async_evaluate)
     result.update(omni_results)
     if omni_results:
-        print(f"完成{len(omni_results)}个Omni数据集{'推理' if async_evaluate else '评估'}")
+        print(f"Completed {len(omni_results)} Omni dataset(s) {'inference' if async_evaluate else 'evaluation'}")
     
-    # 异步模式下，等待所有评估任务完成
+    # In async mode, wait for all evaluation tasks to complete
     if async_evaluate:
-        # 只有 rank 0 需要等待评估结果
+        # Only rank 0 needs to wait for evaluation results
         if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
             pending_count = get_pending_eval_count()
             if pending_count > 0:
                 print("\n" + "="*60)
-                print(f"【等待异步评估任务完成】共 {pending_count} 个任务")
+                print(f"[Waiting for async evaluation tasks to complete] Total {pending_count} task(s)")
                 print("="*60)
                 async_results = wait_all_evaluations()
                 result.update(async_results)
     
     print("\n" + "="*60)
-    print(f"【所有评估任务完成】总计评估{len(result)}个数据集")
+    print(f"[All evaluation tasks completed] Evaluated {len(result)} dataset(s) in total")
     print("="*60)
     
     return result
 
 def save_evaluation_results(result, args, time):
-    """保存评估结果，按照数据集名称分别保存"""
-    print(f"\n最终评估结果汇总: {result}")
+    """Save evaluation results, one file per dataset"""
+    print(f"\nFinal evaluation results summary: {result}")
     
-    # 构建结果保存路径
+    # Build result save path
     result_dir = os.path.join(args.answer_path, args.model_name, time)
     os.makedirs(result_dir, exist_ok=True)
     
-    # 检查是否有有效结果
+    # Check for valid results
     output_flag = False
     saved_files = []
     
@@ -457,11 +457,11 @@ def save_evaluation_results(result, args, time):
         if score is not None and score >= 0.0:
             output_flag = True
             
-            # 为每个数据集创建单独的结果文件
+            # Create a separate result file for each dataset
             result_filename = f"result_{dataset_name}.json"
             result_path = os.path.join(result_dir, result_filename)
             job_id = os.getenv('JOB_ID', -1)
-            # 保存单个数据集的结果
+            # Save individual dataset result
             dataset_result = {
                 "dataset_name": dataset_name,
                 "score": score,
@@ -474,10 +474,10 @@ def save_evaluation_results(result, args, time):
                 json.dump(dataset_result, f, indent=4, ensure_ascii=False)
             
             saved_files.append(result_filename)
-            print(f"✅ {dataset_name} 结果已保存到: {result_filename}")
+            print(f"{dataset_name} result saved to: {result_filename}")
     
     if output_flag:
-        print(f"✅ 共保存了 {len(saved_files)} 个数据集的结果文件")
-        print(f"📁 结果保存在目录: {result_dir}")
+        print(f"Saved {len(saved_files)} dataset result file(s)")
+        print(f"Results saved in directory: {result_dir}")
     else:
-        print("⚠️ 没有有效的评估结果需要保存")
+        print("No valid evaluation results to save")

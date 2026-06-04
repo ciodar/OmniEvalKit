@@ -1,22 +1,22 @@
 """
-omnievalkit评估主程序
+OmniEvalKit main evaluation program
 
-支持多种数据集的评估，包括：
-- 音频数据集：GigaSpeech、WeNetSpeech、AudioQA1M等
-- 视频数据集：OVOBench、StreamingBench
-- 多模态数据集：VisionCap、OmniCap、LiveCC、AVEvent等
+Supports evaluation of multiple datasets, including:
+- Audio datasets: GigaSpeech, WeNetSpeech, AudioQA1M, etc.
+- Video datasets: OVOBench, StreamingBench
+- Multimodal datasets: VisionCap, OmniCap, LiveCC, AVEvent, etc.
 
-StreamingBench支持四种任务类型：
-1. real: 实时视觉理解 - 基于当前时刻的视觉问答
-2. omni: 全模态理解 - 结合视频和音频的多模态问答  
-3. sqa: 序列问答 - 基于视频历史的连续对话
-4. proactive: 主动输出 - 特殊的循环推理逻辑，模型主动判断输出时机
+StreamingBench supports four task types:
+1. real: Real-time visual understanding - visual QA based on current moment
+2. omni: Omni-modal understanding - multimodal QA combining video and audio
+3. sqa: Sequential QA - continuous dialogue based on video history
+4. proactive: Proactive output - special loop reasoning logic where model actively decides when to output
 
-proactive任务的完整适配：
-- 推理阶段：使用generate_proactive方法，实现循环时间判断 + 两阶段问答
-- 评估阶段：使用StreamingProactiveEval评估器，考虑时间和内容双重准确性
+Full proactive task adaptation:
+- Inference: Uses generate_proactive method, implementing cyclic timing judgment + two-stage QA
+- Evaluation: Uses StreamingProactiveEval evaluator, considering both timing and content accuracy
 
-使用示例：
+Usage examples:
 python eval_main.py --model_type minicpmo_chat --eval_streamingbench --streamingbench_tasks proactive
 python eval_main.py --eval_streamingbench --streamingbench_tasks real omni sqa proactive
 """
@@ -32,21 +32,21 @@ from o_e_Kit.utils.evaluation_runner import run_all_evaluations, save_evaluation
 
 
 def main(args):
-    """主函数：初始化环境、加载模型、运行评估"""
+    """Main: initialize environment, load model, run evaluations"""
     
-    # 设置时间戳
+    # Set timestamp
     if args.prefix == "":
         time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     else:
         time = args.prefix
     
-    # 初始化分布式训练
-    # 增加 NCCL 超时时间，避免因推理速度不均匀导致的超时
+    # Initialize distributed training
+    # Increase NCCL timeout to avoid hangs due to uneven inference speed
     torch.distributed.init_process_group(
         backend='nccl',
         world_size=int(os.getenv('WORLD_SIZE', '1')),
         rank=int(os.getenv('RANK', '0')),
-        timeout=datetime.timedelta(hours=2),  # 设置 2 小时超时
+        timeout=datetime.timedelta(hours=2),  # Set 2-hour timeout
     )
     torch.cuda.set_device(int(os.getenv('LOCAL_RANK', 0)))
     print(f'Init Rank-{torch.distributed.get_rank()}')
@@ -54,24 +54,24 @@ def main(args):
     if torch.distributed.is_initialized():
         args.device = torch.device(f"cuda:{torch.cuda.current_device()}")
     
-    # 加载模型
+    # Load model
     model = load_model(args, args.device)
     
-    # 运行所有评估
+    # Run all evaluations
     result = run_all_evaluations(args, model, args.device, time)
     
-    # 同步所有进程
+    # Sync all processes
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
     
-    # 只在主进程保存结果
+    # Only save results on main process
     if torch.distributed.is_initialized() and torch.distributed.get_rank() != 0:
         return None
     
-    # 保存评估结果
+    # Save evaluation results
     save_evaluation_results(result, args, time)
     
-    # 清理分布式训练
+    # Clean up distributed training
     if torch.distributed.is_initialized():
         torch.distributed.destroy_process_group()
 

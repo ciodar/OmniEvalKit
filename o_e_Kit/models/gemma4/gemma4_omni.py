@@ -398,6 +398,9 @@ class Gemma4OmniEvalModel:
                 )
                 try:
                     response = self.processor.parse_response(raw)
+                    if isinstance(response, dict):
+                        response = response.get('content') or response.get('text') or ''
+                    response = str(response).strip()
                 except (AttributeError, Exception):
                     # parse_response unavailable in this transformers version;
                     # fall back to manual stripping.

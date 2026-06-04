@@ -571,12 +571,19 @@ class MQAEvaluator(BaseEvaluator):
         )
         
         try:
-            response = self.llm_client.get_eval(content=prompt, max_tokens=10, temperature=0.0, model_name=APIModelName.GPT_4O_MINI)
+            response = self.llm_client.get_eval(content=prompt, max_tokens=2048, temperature=0.0, model_name=APIModelName.GPT_4O_MINI)
             prediction['llm_response'] = response
-            response = response.strip().upper()
+            # Strip Qwen3/thinking-model <think>...</think> blocks, then extract the final letter
+            response_clean = re.sub(r'<think>.*?</think>', '', response, flags=re.DOTALL).strip()
+            # If no </think> block, take the last non-empty line (thinking comes before the answer)
+            if not response_clean:
+                response_clean = response.strip()
+            lines = [l.strip() for l in response_clean.split('\n') if l.strip()]
+            response_clean = lines[-1] if lines else response_clean
+            response_clean = response_clean.strip().upper()
             
             # 提取答案
-            extracted_answer = response
+            extracted_answer = response_clean
             
             if extracted_answer and extracted_answer != 'Z':
                 is_correct = (extracted_answer == ground_truth)
